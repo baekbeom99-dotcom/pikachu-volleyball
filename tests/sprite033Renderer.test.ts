@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   SPRITE_033_CELL_HEIGHT,
   SPRITE_033_CELL_WIDTH,
@@ -8,6 +8,40 @@ import {
   computeSpriteSlice,
   type SpriteManifest,
 } from '../src/render/sprite033Renderer';
+
+function createMockCanvas2D(): CanvasRenderingContext2D {
+  return {
+    save: vi.fn(),
+    restore: vi.fn(),
+    translate: vi.fn(),
+    scale: vi.fn(),
+    rotate: vi.fn(),
+    beginPath: vi.fn(),
+    closePath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    quadraticCurveTo: vi.fn(),
+    arc: vi.fn(),
+    ellipse: vi.fn(),
+    roundRect: vi.fn(),
+    rect: vi.fn(),
+    fill: vi.fn(),
+    stroke: vi.fn(),
+    fillText: vi.fn(),
+    strokeText: vi.fn(),
+    drawImage: vi.fn(),
+    measureText: vi.fn(() => ({ width: 20 })),
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    lineJoin: 'round',
+    lineCap: 'round',
+    font: '',
+    textAlign: 'center',
+    textBaseline: 'middle',
+    globalAlpha: 1,
+  } as unknown as CanvasRenderingContext2D;
+}
 
 function loadRealManifest(): SpriteManifest {
   const raw = readFileSync(
@@ -207,39 +241,13 @@ describe('computeSpriteSlice', () => {
 });
 
 describe('Sprite033Renderer', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('delegates to PlaceholderCharacterRenderer before sheets are loaded', () => {
     const renderer = new Sprite033Renderer();
-    const ctx = {
-      save: vi.fn(),
-      restore: vi.fn(),
-      translate: vi.fn(),
-      scale: vi.fn(),
-      rotate: vi.fn(),
-      beginPath: vi.fn(),
-      closePath: vi.fn(),
-      moveTo: vi.fn(),
-      lineTo: vi.fn(),
-      quadraticCurveTo: vi.fn(),
-      arc: vi.fn(),
-      ellipse: vi.fn(),
-      roundRect: vi.fn(),
-      rect: vi.fn(),
-      fill: vi.fn(),
-      stroke: vi.fn(),
-      fillText: vi.fn(),
-      strokeText: vi.fn(),
-      drawImage: vi.fn(),
-      measureText: vi.fn(() => ({ width: 20 })),
-      fillStyle: '',
-      strokeStyle: '',
-      lineWidth: 1,
-      lineJoin: 'round',
-      lineCap: 'round',
-      font: '',
-      textAlign: 'center',
-      textBaseline: 'middle',
-      globalAlpha: 1,
-    } as unknown as CanvasRenderingContext2D;
+    const ctx = createMockCanvas2D();
 
     expect(renderer.isLoaded()).toBe(false);
     renderer.render(ctx, {
@@ -257,5 +265,122 @@ describe('Sprite033Renderer', () => {
     expect(ctx.save).toHaveBeenCalled();
     expect(ctx.restore).toHaveBeenCalled();
     expect(ctx.drawImage).not.toHaveBeenCalled();
+  });
+
+  it('loads manifest and sheets and renders sliced frames via ctx.drawImage', async () => {
+    const manifest = loadRealManifest();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => manifest,
+      })),
+    );
+
+    class MockImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      complete = true;
+      naturalWidth = 1952;
+      private _src = '';
+      get src(): string {
+        return this._src;
+      }
+      set src(value: string) {
+        this._src = value;
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    vi.stubGlobal('Image', MockImage);
+
+    const renderer = new Sprite033Renderer('/sprites/033');
+    await renderer.load();
+    expect(renderer.isLoaded()).toBe(true);
+
+    const ctx = createMockCanvas2D();
+    renderer.render(ctx, {
+      playerId: 'p1',
+      x: 220,
+      y: 498,
+      vx: 150,
+      vy: 0,
+      radius: 38,
+      facing: 1,
+      animState: 'walk',
+      animTime: 7 / 11 + 0.01,
+    });
+
+    expect(ctx.drawImage).toHaveBeenCalledTimes(1);
+    const [, sx, sy, sw, sh] = (ctx.drawImage as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(sx).toBe(7 * 244);
+    expect(sy).toBe(1 * 250);
+    expect(sw).toBe(244);
+    expect(sh).toBe(250);
+  });
+
+  it('recomputes idle slice when falling back from an unloaded action sheet', async () => {
+    const manifest = loadRealManifest();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => manifest,
+      })),
+    );
+
+    class PartialMockImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      complete = false;
+      naturalWidth = 0;
+      private _src = '';
+      get src(): string {
+        return this._src;
+      }
+      set src(value: string) {
+        this._src = value;
+        queueMicrotask(() => {
+          if (value.endsWith('idle_sheet.png')) {
+            this.complete = true;
+            this.naturalWidth = 976;
+            this.onload?.();
+          } else {
+            this.complete = false;
+            this.naturalWidth = 0;
+            this.onerror?.();
+          }
+        });
+      }
+    }
+    vi.stubGlobal('Image', PartialMockImage);
+
+    const renderer = new Sprite033Renderer('/sprites/033');
+    await renderer.load();
+    expect(renderer.isLoaded()).toBe(true);
+
+    const ctx = createMockCanvas2D();
+    // Walk at t = 7/11 + 0.01 would select frame 7 (sx = 1708) on walk sheet,
+    // which exceeds 976px idle_sheet.png if slice is not recomputed!
+    const animTime = 7 / 11 + 0.01;
+    renderer.render(ctx, {
+      playerId: 'p2',
+      x: 640,
+      y: 498,
+      vx: -120,
+      vy: 0,
+      radius: 38,
+      facing: -1,
+      animState: 'walk',
+      animTime,
+    });
+
+    expect(ctx.drawImage).toHaveBeenCalledTimes(1);
+    const [imgArg, sx, sy, sw, sh] = (ctx.drawImage as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect((imgArg as { src: string }).src).toContain('idle_sheet.png');
+    expect(sx).toBeLessThan(976);
+    expect(sx).toBe((Math.floor(animTime * manifest.actions.idle.fps) % manifest.actions.idle.frames) * 244);
+    expect(sy).toBe(0);
+    expect(sw).toBe(244);
+    expect(sh).toBe(250);
   });
 });

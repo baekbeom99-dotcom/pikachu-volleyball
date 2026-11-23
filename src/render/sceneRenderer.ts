@@ -40,7 +40,8 @@ export interface PopArtSceneRendererOptions {
 
 const TOO_CLOSE_WIDTH_REF = 0.58;
 const TOO_CLOSE_HEIGHT_REF = 0.85;
-const OK_RATIO_MARKER = 0.48 / TOO_CLOSE_WIDTH_REF;
+const OK_WIDTH_REF = 0.48;
+const OK_HEIGHT_REF = 0.76;
 
 function toCharacterRenderData(player: PlayerState): CharacterRenderData {
   return {
@@ -208,7 +209,13 @@ export class PopArtSceneRenderer {
         this.drawMotionHalfGate(ctx, leftStatus, frameX + 6, frameY + 20, frameW * 0.5 - 12, frameH - 26);
         this.drawMotionHalfGate(ctx, rightStatus, midX + 6, frameY + 20, frameW * 0.5 - 12, frameH - 26);
       } else {
-        const rightActive = rightStatus.detected && leftStatus.gateStatus === 'NO_PERSON';
+        const explicitActiveSide = (
+          overlay.motionOverlay as MotionOverlayData & { activeSide?: 'left' | 'right' }
+        ).activeSide;
+        const rightActive =
+          explicitActiveSide !== undefined
+            ? explicitActiveSide === 'right'
+            : rightStatus.detected && leftStatus.gateStatus === 'NO_PERSON';
         const activeStatus = rightActive ? rightStatus : leftStatus;
         const activeX = rightActive ? midX + 6 : frameX + 6;
         this.drawMotionHalfGate(ctx, activeStatus, activeX, frameY + 20, frameW * 0.5 - 12, frameH - 26);
@@ -226,13 +233,16 @@ export class PopArtSceneRenderer {
     w: number,
     h: number,
   ): void {
-    const ratio = Math.max(
-      status.widthRatio / TOO_CLOSE_WIDTH_REF,
-      status.heightRatio / TOO_CLOSE_HEIGHT_REF,
-    );
+    const widthNorm = status.widthRatio / TOO_CLOSE_WIDTH_REF;
+    const heightNorm = status.heightRatio / TOO_CLOSE_HEIGHT_REF;
+    const ratio = Math.max(widthNorm, heightNorm);
+    const okRatioMarker =
+      heightNorm > widthNorm
+        ? OK_HEIGHT_REF / TOO_CLOSE_HEIGHT_REF
+        : OK_WIDTH_REF / TOO_CLOSE_WIDTH_REF;
     const gaugeMax = 1.25;
     const fillNorm = Math.max(0, Math.min(1, ratio / gaugeMax));
-    const okTickNorm = OK_RATIO_MARKER / gaugeMax;
+    const okTickNorm = okRatioMarker / gaugeMax;
     const dangerTickNorm = 1 / gaugeMax;
 
     if (status.gateStatus === 'OK') {

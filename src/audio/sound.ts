@@ -66,11 +66,8 @@ export class PopArtAudio {
       return null;
     }
     const ctx = this.ensureContext();
-    if (!ctx) {
+    if (!ctx || ctx.state === 'suspended') {
       return null;
-    }
-    if (ctx.state === 'suspended') {
-      void ctx.resume().catch(() => {});
     }
     return ctx;
   }

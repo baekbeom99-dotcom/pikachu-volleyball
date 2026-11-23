@@ -213,17 +213,20 @@ export class Sprite033Renderer implements CharacterRenderer {
       return;
     }
 
-    const slice = computeSpriteSlice(
+    let slice = computeSpriteSlice(
       data.animState,
       data.facing,
       data.animTime,
       this.manifest,
     );
-    const img =
-      this.sheetImages.get(slice.actionKey) ?? this.sheetImages.get('idle');
+    let img = this.sheetImages.get(slice.actionKey);
     if (!img || !img.complete || img.naturalWidth <= 0) {
-      this.placeholder.render(ctx, data);
-      return;
+      slice = computeSpriteSlice('idle', data.facing, data.animTime, this.manifest);
+      img = this.sheetImages.get('idle');
+      if (!img || !img.complete || img.naturalWidth <= 0) {
+        this.placeholder.render(ctx, data);
+        return;
+      }
     }
 
     const isP1 = data.playerId === 'p1';
