@@ -59,7 +59,6 @@ function makePose(options: PoseBuilderOptions = {}): NormalizedLandmark[] {
 describe('motionMath', () => {
   it('returns NO_PERSON for null, empty, or insufficient visible landmarks', () => {
     const tracker = createSideTrackerState();
-    tracker.okHoldSeconds = 0.4;
     tracker.lastGateStatus = 'OK';
 
     const emptyRes = evaluateSidePose('left', null, tracker, 1 / 60);
@@ -71,7 +70,6 @@ describe('motionMath', () => {
       heightRatio: 0,
       gateStatus: 'NO_PERSON',
     });
-    expect(tracker.okHoldSeconds).toBe(0);
     expect(tracker.lastGateStatus).toBe('NO_PERSON');
 
     const emptyArrayRes = evaluateSidePose('right', [], tracker, 1 / 60);
@@ -310,68 +308,20 @@ describe('motionMath', () => {
     expect(sustainedTracker.intrusionHoldSeconds).toBe(0);
   });
 
-  it('enforces distance gate hysteresis across TOO_CLOSE, OK hold duration, and deadband', () => {
+  it('marks detected poses OK immediately regardless of close-up width or height', () => {
     const tracker = createSideTrackerState();
 
-    // Too close by width (0.64 > 0.58)
-    const tooClose = evaluateSidePose(
+    // Close-up wide/tall pose is immediately OK (no TOO_CLOSE pause gate)
+    const closeUp = evaluateSidePose(
       'left',
-      makePose({ centerX: 0.5, width: 0.64, minY: 0.2, maxY: 0.85 }),
+      makePose({ centerX: 0.5, width: 0.72, minY: 0.05, maxY: 0.95 }),
       tracker,
-      0.2,
+      1 / 60,
     );
-    expect(tooClose.widthRatio).toBeCloseTo(0.64, 5);
-    expect(tooClose.gateStatus).toBe('TOO_CLOSE');
-
-    // Shrinks to OK dimensions (0.42 <= 0.48, 0.65 <= 0.76) for 0.2s -> still TOO_CLOSE
-    const holding1 = evaluateSidePose(
-      'left',
-      makePose({ centerX: 0.5, width: 0.42, minY: 0.2, maxY: 0.85 }),
-      tracker,
-      0.2,
-    );
-    expect(holding1.widthRatio).toBeCloseTo(0.42, 5);
-    expect(holding1.heightRatio).toBeCloseTo(0.65, 5);
-    expect(holding1.gateStatus).toBe('TOO_CLOSE');
-
-    // Sustained >= 0.5s total -> transitions to OK
-    const holding2 = evaluateSidePose(
-      'left',
-      makePose({ centerX: 0.5, width: 0.42, minY: 0.2, maxY: 0.85 }),
-      tracker,
-      0.3,
-    );
-    expect(holding2.gateStatus).toBe('OK');
-
-    // Deadband (0.52 between 0.48 and 0.58) stays OK once OK
-    const deadband = evaluateSidePose(
-      'left',
-      makePose({ centerX: 0.5, width: 0.52, minY: 0.2, maxY: 0.85 }),
-      tracker,
-      0.1,
-    );
-    expect(deadband.gateStatus).toBe('OK');
-    expect(tracker.okHoldSeconds).toBe(0);
-
-    // Too close by height (0.88 > 0.85) drops back to TOO_CLOSE
-    const tooTall = evaluateSidePose(
-      'left',
-      makePose({ centerX: 0.5, width: 0.4, minY: 0.06, maxY: 0.94 }),
-      tracker,
-      0.1,
-    );
-    expect(tooTall.heightRatio).toBeCloseTo(0.88, 5);
-    expect(tooTall.gateStatus).toBe('TOO_CLOSE');
-
-    // Deadband while TOO_CLOSE stays TOO_CLOSE
-    const deadbandTooClose = evaluateSidePose(
-      'left',
-      makePose({ centerX: 0.5, width: 0.52, minY: 0.2, maxY: 0.85 }),
-      tracker,
-      0.3,
-    );
-    expect(deadbandTooClose.gateStatus).toBe('TOO_CLOSE');
-    expect(tracker.okHoldSeconds).toBe(0);
+    expect(closeUp.detected).toBe(true);
+    expect(closeUp.widthRatio).toBeCloseTo(0.72, 5);
+    expect(closeUp.heightRatio).toBeCloseTo(0.9, 5);
+    expect(closeUp.gateStatus).toBe('OK');
   });
 
   it('detects jumps from hip rise, shoulder rise, and raised wrist above nose', () => {
@@ -457,19 +407,6 @@ describe('motionMath', () => {
     expect(driftTracker.baselineHipY).toBeCloseTo(0.6 + 0.04 * (0.57 - 0.6), 5);
   });
 
-  it('completes OK distance hysteresis cleanly in 30 frames of WORLD.FIXED_DT', () => {
-    const tracker = createSideTrackerState();
-    const okPose = makePose({ centerX: 0.5, width: 0.42, minY: 0.2, maxY: 0.85 });
-
-    for (let i = 0; i < 29; i += 1) {
-      const frame = evaluateSidePose('left', okPose, tracker, WORLD.FIXED_DT);
-      expect(frame.gateStatus).toBe('TOO_CLOSE');
-    }
-
-    const frame30 = evaluateSidePose('left', okPose, tracker, WORLD.FIXED_DT);
-    expect(frame30.gateStatus).toBe('OK');
-  });
-
   it('handles NaN landmark coordinates and non-finite dt safely', () => {
     const tracker = createSideTrackerState();
     const poseWithNaN = makePose({ centerX: 0.5, width: 0.4, minY: 0.2, maxY: 0.85 });
@@ -477,10 +414,10 @@ describe('motionMath', () => {
 
     const nanDtRes = evaluateSidePose('left', poseWithNaN, tracker, Number.NaN);
     expect(nanDtRes.detected).toBe(true);
+    expect(nanDtRes.gateStatus).toBe('OK');
     expect(Number.isFinite(nanDtRes.targetX)).toBe(true);
     expect(Number.isFinite(nanDtRes.widthRatio)).toBe(true);
     expect(Number.isFinite(nanDtRes.heightRatio)).toBe(true);
-    expect(tracker.okHoldSeconds).toBe(0);
 
     // If all face and torso landmarks become NaN, tracker safely reports NO_PERSON without poisoning state
     const badAnchorPose = makePose({ centerX: 0.5 });

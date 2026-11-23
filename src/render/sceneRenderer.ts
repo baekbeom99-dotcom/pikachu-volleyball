@@ -40,11 +40,6 @@ export interface PopArtSceneRendererOptions {
   preloadSprites?: boolean;
 }
 
-const TOO_CLOSE_WIDTH_REF = 0.58;
-const TOO_CLOSE_HEIGHT_REF = 0.85;
-const OK_WIDTH_REF = 0.48;
-const OK_HEIGHT_REF = 0.76;
-
 function toCharacterRenderData(player: PlayerState): CharacterRenderData {
   return {
     playerId: player.id,
@@ -138,75 +133,135 @@ export class PopArtSceneRenderer {
     state: GameState,
     overlay: SceneOverlayContext,
   ): void {
-    const frameW = 368;
-    const frameH = 248;
-    const frameX = (WORLD.WIDTH - frameW) * 0.5;
-    const frameY = 78;
+    const panelW = 168;
+    const panelH = 240;
+    const panelY = 78;
+    const leftCenterX = WORLD.NET_LEFT * 0.5; // 212 — center of left court
+    const rightCenterX = (WORLD.NET_RIGHT + WORLD.WIDTH) * 0.5; // 652 — center of right court
+    const leftPanelX = leftCenterX - panelW * 0.5;
+    const rightPanelX = rightCenterX - panelW * 0.5;
     const isWaiting = state.phase === 'WAITING_DISTANCE';
 
-    ctx.save();
-    ctx.globalAlpha = isWaiting ? 0.98 : 0.78;
-    drawPopPanel(ctx, frameX, frameY, frameW, frameH, POP_PALETTE.CREAM, 6, 4);
+    const statuses = overlay.motionOverlay?.statuses;
+    const leftStatus = statuses ? statuses[0] : undefined;
+    const rightStatus = statuses ? statuses[1] : undefined;
+    const explicitActiveSide = overlay.motionOverlay?.activeSide;
+    const rightActiveInNpc =
+      explicitActiveSide !== undefined
+        ? explicitActiveSide === 'right'
+        : Boolean(rightStatus?.detected && leftStatus?.gateStatus === 'NO_PERSON');
 
-    if (overlay.motionPreviewCanvas) {
-      ctx.drawImage(overlay.motionPreviewCanvas, frameX + 4, frameY + 4, frameW - 8, frameH - 8);
+    const leftLabel =
+      state.opponentMode === '2p' ? '1P' : rightActiveInNpc ? 'NPC' : 'HUMAN';
+    const rightLabel =
+      state.opponentMode === '2p' ? '2P' : rightActiveInNpc ? 'HUMAN' : 'NPC';
+    const showLeftGate =
+      isWaiting && (state.opponentMode === '2p' || !rightActiveInNpc);
+    const showRightGate =
+      isWaiting && (state.opponentMode === '2p' || rightActiveInNpc);
+
+    this.drawCourtCameraHalf(ctx, {
+      side: 'left',
+      x: leftPanelX,
+      y: panelY,
+      w: panelW,
+      h: panelH,
+      label: leftLabel,
+      labelFill: state.opponentMode === '2p' || !rightActiveInNpc ? POP_PALETTE.YELLOW : POP_PALETTE.CYAN,
+      previewCanvas: overlay.motionPreviewCanvas,
+      hasError: Boolean(overlay.motionOverlay?.error),
+      status: leftStatus,
+      showGate: showLeftGate,
+      isWaiting,
+    });
+
+    this.drawCourtCameraHalf(ctx, {
+      side: 'right',
+      x: rightPanelX,
+      y: panelY,
+      w: panelW,
+      h: panelH,
+      label: rightLabel,
+      labelFill: state.opponentMode === '2p' ? POP_PALETTE.MAGENTA : rightActiveInNpc ? POP_PALETTE.YELLOW : POP_PALETTE.CYAN,
+      labelTextFill: state.opponentMode === '2p' ? POP_PALETTE.CREAM : POP_PALETTE.INK,
+      previewCanvas: overlay.motionPreviewCanvas,
+      hasError: Boolean(overlay.motionOverlay?.error),
+      status: rightStatus,
+      showGate: showRightGate,
+      isWaiting,
+    });
+  }
+
+  private drawCourtCameraHalf(
+    ctx: CanvasRenderingContext2D,
+    opts: {
+      side: 'left' | 'right';
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      label: string;
+      labelFill: string;
+      labelTextFill?: string;
+      previewCanvas: HTMLCanvasElement | null;
+      hasError: boolean;
+      status?: MotionSideStatus;
+      showGate: boolean;
+      isWaiting: boolean;
+    },
+  ): void {
+    const { side, x, y, w, h, label, labelFill, labelTextFill, previewCanvas, hasError, status, showGate, isWaiting } = opts;
+
+    ctx.save();
+    ctx.globalAlpha = isWaiting ? 0.96 : 0.76;
+    drawPopPanel(ctx, x, y, w, h, POP_PALETTE.CREAM, 5, 4);
+
+    if (previewCanvas) {
+      const srcW = previewCanvas.width || 480;
+      const srcH = previewCanvas.height || 360;
+      const sx = side === 'left' ? 0 : srcW * 0.5;
+      ctx.drawImage(
+        previewCanvas,
+        sx,
+        0,
+        srcW * 0.5,
+        srcH,
+        x + 4,
+        y + 4,
+        w - 8,
+        h - 8,
+      );
     } else {
       ctx.fillStyle = '#1E293B';
-      ctx.fillRect(frameX + 4, frameY + 4, frameW - 8, frameH - 8);
+      ctx.fillRect(x + 4, y + 4, w - 8, h - 8);
       drawPopText(
         ctx,
-        overlay.motionOverlay?.error ? 'CAMERA UNAVAILABLE' : 'STARTING CAMERA...',
-        frameX + frameW * 0.5,
-        frameY + frameH * 0.5,
+        hasError ? 'NO CAMERA' : 'LOADING...',
+        x + w * 0.5,
+        y + h * 0.5,
         {
-          font: `900 18px ${POP_DISPLAY_FONT}`,
+          font: `900 14px ${POP_DISPLAY_FONT}`,
           fill: POP_PALETTE.YELLOW,
-          strokeWidth: 4,
-          shadowOffsetX: 2,
-          shadowOffsetY: 2,
+          strokeWidth: 3,
+          shadowOffsetX: 1,
+          shadowOffsetY: 1,
         },
       );
     }
 
-    // Thick comic divider down the center of the camera feed
-    const midX = frameX + frameW * 0.5;
-    ctx.strokeStyle = POP_PALETTE.INK;
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(midX, frameY + 4);
-    ctx.lineTo(midX, frameY + frameH - 4);
-    ctx.stroke();
-
-    const splitLabel =
-      state.opponentMode === '2p'
-        ? '1P  |  2P'
-        : overlay.motionOverlay?.activeSide === 'right'
-          ? 'NPC  |  HUMAN'
-          : 'HUMAN  |  NPC';
-    drawPopPanel(ctx, midX - 58, frameY - 12, 116, 24, POP_PALETTE.YELLOW, 3, 3);
-    drawPopText(ctx, splitLabel, midX, frameY, {
-      font: `900 13px ${POP_DISPLAY_FONT}`,
-      fill: POP_PALETTE.INK,
+    const badgeW = 78;
+    const badgeH = 22;
+    drawPopPanel(ctx, x + (w - badgeW) * 0.5, y - 11, badgeW, badgeH, labelFill, 3, 3);
+    drawPopText(ctx, label, x + w * 0.5, y, {
+      font: `900 12px ${POP_DISPLAY_FONT}`,
+      fill: labelTextFill ?? POP_PALETTE.INK,
       strokeWidth: 0,
       shadowOffsetX: 0,
       shadowOffsetY: 0,
     });
 
-    if (isWaiting && overlay.motionOverlay) {
-      const [leftStatus, rightStatus] = overlay.motionOverlay.statuses;
-      if (state.opponentMode === '2p') {
-        this.drawMotionHalfGate(ctx, leftStatus, frameX + 6, frameY + 20, frameW * 0.5 - 12, frameH - 26);
-        this.drawMotionHalfGate(ctx, rightStatus, midX + 6, frameY + 20, frameW * 0.5 - 12, frameH - 26);
-      } else {
-        const explicitActiveSide = overlay.motionOverlay.activeSide;
-        const rightActive =
-          explicitActiveSide !== undefined
-            ? explicitActiveSide === 'right'
-            : rightStatus.detected && leftStatus.gateStatus === 'NO_PERSON';
-        const activeStatus = rightActive ? rightStatus : leftStatus;
-        const activeX = rightActive ? midX + 6 : frameX + 6;
-        this.drawMotionHalfGate(ctx, activeStatus, activeX, frameY + 20, frameW * 0.5 - 12, frameH - 26);
-      }
+    if (showGate && status) {
+      this.drawMotionHalfGate(ctx, status, x + 4, y + 16, w - 8, h - 20);
     }
 
     ctx.restore();
@@ -220,22 +275,10 @@ export class PopArtSceneRenderer {
     w: number,
     h: number,
   ): void {
-    const widthNorm = status.widthRatio / TOO_CLOSE_WIDTH_REF;
-    const heightNorm = status.heightRatio / TOO_CLOSE_HEIGHT_REF;
-    const ratio = Math.max(widthNorm, heightNorm);
-    const okRatioMarker =
-      heightNorm > widthNorm
-        ? OK_HEIGHT_REF / TOO_CLOSE_HEIGHT_REF
-        : OK_WIDTH_REF / TOO_CLOSE_WIDTH_REF;
-    const gaugeMax = 1.25;
-    const fillNorm = Math.max(0, Math.min(1, ratio / gaugeMax));
-    const okTickNorm = okRatioMarker / gaugeMax;
-    const dangerTickNorm = 1 / gaugeMax;
-
     if (status.gateStatus === 'OK') {
-      drawPopPanel(ctx, x + 8, y + h - 42, w - 16, 32, POP_PALETTE.LIME, 3, 3);
-      drawPopText(ctx, 'OK! READY', x + w * 0.5, y + h - 26, {
-        font: `900 16px ${POP_DISPLAY_FONT}`,
+      drawPopPanel(ctx, x + 8, y + h - 38, w - 16, 30, POP_PALETTE.LIME, 3, 3);
+      drawPopText(ctx, 'OK! READY', x + w * 0.5, y + h - 23, {
+        font: `900 14px ${POP_DISPLAY_FONT}`,
         fill: POP_PALETTE.INK,
         strokeWidth: 0,
         shadowOffsetX: 0,
@@ -244,69 +287,31 @@ export class PopArtSceneRenderer {
       return;
     }
 
-    const isTooClose = status.gateStatus === 'TOO_CLOSE';
-    const bannerFill = isTooClose ? POP_PALETTE.RED : POP_PALETTE.YELLOW;
-    const bannerTextFill = isTooClose ? POP_PALETTE.CREAM : POP_PALETTE.INK;
-    const title = isTooClose ? 'STEP BACK!' : 'STEP IN!';
-    const subtitle = isTooClose ? '멀리 떨어지세요' : '카메라 안으로 들어오세요';
-
-    // Dim half backdrop so warning pops crisply
     ctx.save();
-    ctx.fillStyle = isTooClose ? 'rgba(255, 59, 48, 0.25)' : 'rgba(17, 17, 17, 0.35)';
+    ctx.fillStyle = 'rgba(17, 17, 17, 0.35)';
     ctx.fillRect(x, y, w, h);
     ctx.restore();
 
-    const boxH = 88;
+    const boxH = 66;
     const boxY = y + h * 0.5 - boxH * 0.5;
-    drawPopPanel(ctx, x + 4, boxY, w - 8, boxH, bannerFill, 4, 3);
+    drawPopPanel(ctx, x + 4, boxY, w - 8, boxH, POP_PALETTE.YELLOW, 4, 3);
 
-    drawPopText(ctx, title, x + w * 0.5, boxY + 22, {
-      font: `900 20px ${POP_DISPLAY_FONT}`,
-      fill: bannerTextFill,
-      strokeColor: POP_PALETTE.INK,
-      strokeWidth: isTooClose ? 3.5 : 0,
-      shadowOffsetX: isTooClose ? 2 : 0,
-      shadowOffsetY: isTooClose ? 2 : 0,
-    });
-
-    drawPopText(ctx, subtitle, x + w * 0.5, boxY + 46, {
-      font: '700 13px "Noto Sans KR", "Arial Black", sans-serif',
-      fill: bannerTextFill,
+    drawPopText(ctx, 'STEP IN!', x + w * 0.5, boxY + 22, {
+      font: `900 18px ${POP_DISPLAY_FONT}`,
+      fill: POP_PALETTE.INK,
       strokeWidth: 0,
       shadowOffsetX: 0,
       shadowOffsetY: 0,
-      maxWidth: w - 18,
     });
 
-    // Live size-ratio gauge bar
-    const barX = x + 14;
-    const barY = boxY + 62;
-    const barW = w - 28;
-    const barH = 14;
-
-    ctx.save();
-    ctx.fillStyle = POP_PALETTE.CREAM;
-    ctx.fillRect(barX, barY, barW, barH);
-
-    // Safe green target zone up to OK threshold
-    ctx.fillStyle = 'rgba(163, 230, 53, 0.45)';
-    ctx.fillRect(barX, barY, barW * okTickNorm, barH);
-
-    // Current detected size ratio fill
-    ctx.fillStyle = isTooClose ? POP_PALETTE.MAGENTA : POP_PALETTE.CYAN;
-    ctx.fillRect(barX, barY, barW * fillNorm, barH);
-
-    // Danger threshold marker
-    const dangerX = barX + barW * dangerTickNorm;
-    ctx.strokeStyle = POP_PALETTE.INK;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(dangerX, barY - 2);
-    ctx.lineTo(dangerX, barY + barH + 2);
-    ctx.stroke();
-
-    ctx.strokeRect(barX, barY, barW, barH);
-    ctx.restore();
+    drawPopText(ctx, '카메라 안으로 들어오세요', x + w * 0.5, boxY + 46, {
+      font: '700 11px "Noto Sans KR", "Arial Black", sans-serif',
+      fill: POP_PALETTE.INK,
+      strokeWidth: 0,
+      shadowOffsetX: 0,
+      shadowOffsetY: 0,
+      maxWidth: w - 16,
+    });
   }
 
   private drawCourt(ctx: CanvasRenderingContext2D): void {

@@ -662,10 +662,10 @@ export class MenuUI {
     const list = document.createElement('ul');
     list.className = 'pop-guide-list';
     const items = [
-      '📷 좌/우 분할: 카메라 반쪽에서 플레이하며 중앙선을 넘어도 상대에게 영향 없음',
+      '📷 좌/우 분할: 각 코트 중앙의 카메라 화면에서 내 얼굴을 확인하며 플레이',
       '🏃 좌우 이동: 얼굴(머리)을 좌우로 움직이면 캐릭터가 코트 안에서 이동',
       '🙌 점프 & 스파이크: 제자리 점프 또는 두 손을 머리 위로 들기',
-      '↔️ 거리 체크: "STEP BACK!"이 뜨면 카메라에서 한 걸음 물러나기',
+      '😊 인식 안내: 화면에 얼굴이 보이면 거리 제한 없이 바로 시작됩니다',
     ];
     for (const text of items) {
       const li = document.createElement('li');

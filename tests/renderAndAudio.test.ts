@@ -223,7 +223,7 @@ describe('PopArtSceneRenderer', () => {
     expect(zeroTexts).not.toContain('JUMP');
   });
 
-  it('renders motion mode WAITING_DISTANCE warnings and PLAYING preview without errors', () => {
+  it('renders split camera halves centered in each court without STEP BACK warnings', () => {
     const renderer = new PopArtSceneRenderer({ preloadSprites: false });
     const state = createGameState({
       controlMode: 'motion',
@@ -244,7 +244,7 @@ describe('PopArtSceneRenderer', () => {
             detected: true,
             widthRatio: 0.72,
             heightRatio: 0.65,
-            gateStatus: 'TOO_CLOSE',
+            gateStatus: 'OK',
           },
           {
             side: 'right',
@@ -261,20 +261,32 @@ describe('PopArtSceneRenderer', () => {
       showPlaceholders: true,
     });
 
-    expect(waitingCtx.drawImage).toHaveBeenCalledWith(
-      fakePreview,
-      expect.any(Number),
-      expect.any(Number),
-      expect.any(Number),
-      expect.any(Number),
+    const drawCalls = (waitingCtx.drawImage as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call) => call[0] === fakePreview,
     );
+    expect(drawCalls).toHaveLength(2);
+    // Left half (sx=0, sw=240) placed centered inside left court (x < WORLD.NET_LEFT)
+    expect(drawCalls[0][1]).toBe(0);
+    expect(drawCalls[0][3]).toBe(240);
+    expect(drawCalls[0][5] + drawCalls[0][7] * 0.5).toBeCloseTo(WORLD.NET_LEFT * 0.5, 5);
+    // Right half (sx=240, sw=240) placed centered inside right court (x > WORLD.NET_RIGHT)
+    expect(drawCalls[1][1]).toBe(240);
+    expect(drawCalls[1][3]).toBe(240);
+    expect(drawCalls[1][5] + drawCalls[1][7] * 0.5).toBeCloseTo(
+      (WORLD.NET_RIGHT + WORLD.WIDTH) * 0.5,
+      5,
+    );
+
     const waitingTexts = (waitingCtx.fillText as ReturnType<typeof vi.fn>).mock.calls.map(
       (c) => c[0],
     );
-    expect(waitingTexts).toContain('STEP BACK!');
-    expect(waitingTexts).toContain('멀리 떨어지세요');
+    expect(waitingTexts).toContain('1P');
+    expect(waitingTexts).toContain('2P');
+    expect(waitingTexts).toContain('OK! READY');
     expect(waitingTexts).toContain('STEP IN!');
     expect(waitingTexts).toContain('카메라 안으로 들어오세요');
+    expect(waitingTexts).not.toContain('STEP BACK!');
+    expect(waitingTexts).not.toContain('멀리 떨어지세요');
 
     // PLAYING mode should hide WAITING_DISTANCE banners
     state.phase = 'PLAYING';
@@ -297,11 +309,10 @@ describe('PopArtSceneRenderer', () => {
     const playingTexts = (playingCtx.fillText as ReturnType<typeof vi.fn>).mock.calls.map(
       (c) => c[0],
     );
-    expect(playingTexts).not.toContain('STEP BACK!');
     expect(playingTexts).not.toContain('STEP IN!');
   });
 
-  it('renders NPC | HUMAN when opponentMode is npc and activeSide is right', () => {
+  it('places HUMAN and NPC split badges in left and right courts in npc mode', () => {
     const renderer = new PopArtSceneRenderer({ preloadSprites: false });
     const state = createGameState({
       controlMode: 'motion',
@@ -327,7 +338,8 @@ describe('PopArtSceneRenderer', () => {
       showPlaceholders: true,
     });
     const leftTexts = (leftCtx.fillText as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
-    expect(leftTexts).toContain('HUMAN  |  NPC');
+    expect(leftTexts).toContain('HUMAN');
+    expect(leftTexts).toContain('NPC');
 
     const rightCtx = createMockCanvas2D();
     renderer.render(rightCtx, state, {
@@ -346,9 +358,13 @@ describe('PopArtSceneRenderer', () => {
       motionPreviewCanvas: null,
       showPlaceholders: true,
     });
-    const rightTexts = (rightCtx.fillText as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
-    expect(rightTexts).toContain('NPC  |  HUMAN');
-    expect(rightTexts).not.toContain('HUMAN  |  NPC');
+    const rightTextCalls = (rightCtx.fillText as ReturnType<typeof vi.fn>).mock.calls;
+    const npcCall = rightTextCalls.find((c) => c[0] === 'NPC');
+    const humanCall = rightTextCalls.find((c) => c[0] === 'HUMAN');
+    expect(npcCall).toBeDefined();
+    expect(humanCall).toBeDefined();
+    expect(npcCall![1]).toBeCloseTo(WORLD.NET_LEFT * 0.5, 5);
+    expect(humanCall![1]).toBeCloseTo((WORLD.NET_RIGHT + WORLD.WIDTH) * 0.5, 5);
   });
 });
 

@@ -12,7 +12,6 @@ export interface SideTrackerState {
   smoothedCenterX: number | null;
   baselineHipY: number | null;
   baselineShoulderY: number | null;
-  okHoldSeconds: number;
   intrusionHoldSeconds: number;
   lastWidthRatio: number;
   lastHeightRatio: number;
@@ -32,11 +31,6 @@ export const MIN_VISIBILITY = 0.45;
 export const DIVIDER_MARGIN = 0.14;
 export const MAX_ANCHOR_JUMP = 0.35;
 export const EMA_ALPHA = 0.35;
-export const TOO_CLOSE_WIDTH = 0.58;
-export const TOO_CLOSE_HEIGHT = 0.85;
-export const OK_WIDTH = 0.48;
-export const OK_HEIGHT = 0.76;
-export const OK_HOLD_SECONDS = 0.5;
 export const JUMP_RISE_THRESHOLD = 0.06;
 export const HAND_UP_OFFSET = 0.04;
 export const INTRUSION_RESET_SECONDS = 0.4;
@@ -106,7 +100,6 @@ function resetNoPerson(tracker: SideTrackerState): SidePoseEvaluation {
   tracker.smoothedCenterX = null;
   tracker.baselineHipY = null;
   tracker.baselineShoulderY = null;
-  tracker.okHoldSeconds = 0;
   tracker.intrusionHoldSeconds = 0;
   tracker.lastWidthRatio = 0;
   tracker.lastHeightRatio = 0;
@@ -119,34 +112,6 @@ function resetNoPerson(tracker: SideTrackerState): SidePoseEvaluation {
     heightRatio: 0,
     gateStatus: 'NO_PERSON',
   };
-}
-
-function updateDistanceGate(
-  tracker: SideTrackerState,
-  widthRatio: number,
-  heightRatio: number,
-  safeDt: number,
-): MotionGateStatus {
-  if (widthRatio > TOO_CLOSE_WIDTH || heightRatio > TOO_CLOSE_HEIGHT) {
-    tracker.okHoldSeconds = 0;
-    tracker.lastGateStatus = 'TOO_CLOSE';
-    return tracker.lastGateStatus;
-  }
-
-  if (widthRatio <= OK_WIDTH && heightRatio <= OK_HEIGHT) {
-    if (tracker.lastGateStatus === 'OK') {
-      return 'OK';
-    }
-    tracker.okHoldSeconds += safeDt;
-    tracker.lastGateStatus =
-      tracker.okHoldSeconds + HOLD_EPSILON >= OK_HOLD_SECONDS ? 'OK' : 'TOO_CLOSE';
-    return tracker.lastGateStatus;
-  }
-
-  // Deadband between OK and TOO_CLOSE thresholds preserves current gate without accumulating hold time.
-  tracker.okHoldSeconds = 0;
-  tracker.lastGateStatus = tracker.lastGateStatus === 'OK' ? 'OK' : 'TOO_CLOSE';
-  return tracker.lastGateStatus;
 }
 
 function detectJumpAndUpdateBaselines(
@@ -203,7 +168,6 @@ export function createSideTrackerState(): SideTrackerState {
     smoothedCenterX: null,
     baselineHipY: null,
     baselineShoulderY: null,
-    okHoldSeconds: 0,
     intrusionHoldSeconds: 0,
     lastWidthRatio: 0,
     lastHeightRatio: 0,
@@ -289,7 +253,8 @@ export function evaluateSidePose(
   tracker.lastWidthRatio = widthRatio;
   tracker.lastHeightRatio = heightRatio;
 
-  const gateStatus = updateDistanceGate(tracker, widthRatio, heightRatio, safeDt);
+  const gateStatus: MotionGateStatus = 'OK';
+  tracker.lastGateStatus = gateStatus;
 
   const clampedCenterX = clamp01(rawCenterX);
   tracker.smoothedCenterX =

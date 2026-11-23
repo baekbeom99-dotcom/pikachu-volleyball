@@ -62,7 +62,7 @@ export interface BallState {
   trail: Array<{ x: number; y: number; isSpiked: boolean }>;
 }
 
-export type MotionGateStatus = 'NO_PERSON' | 'TOO_CLOSE' | 'OK';
+export type MotionGateStatus = 'NO_PERSON' | 'OK';
 
 export interface MotionSideStatus {
   side: 'left' | 'right';

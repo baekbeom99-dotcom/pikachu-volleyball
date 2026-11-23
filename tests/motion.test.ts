@@ -184,13 +184,9 @@ describe('MotionInputProvider', () => {
       'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
     );
 
-    // Advance video frames over > 0.5s to satisfy distance gate OK hold
+    // Detected pose becomes ready immediately without a distance hold delay
     videoEl.currentTime = 0.25;
-    provider.getInputs(0.25);
-    expect(provider.isMotionReady()).toBe(false);
-
-    videoEl.currentTime = 0.55;
-    const [p1, p2] = provider.getInputs(0.3);
+    const [p1, p2] = provider.getInputs(0.25);
 
     expect(provider.isMotionReady()).toBe(true);
     expect(p2).toEqual({ moveX: 0, targetX: null, jump: false });
@@ -293,8 +289,6 @@ describe('MotionInputProvider', () => {
     expect(provider.getError()).toBeNull();
 
     videoEl.currentTime = 0.3;
-    provider.getInputs(0.3);
-    videoEl.currentTime = 0.6;
     const [p1] = provider.getInputs(0.3);
     expect(provider.isMotionReady()).toBe(true);
     expect(p1.targetX).toBeCloseTo(212, 0);
@@ -334,13 +328,10 @@ describe('MotionInputProvider', () => {
     const previewCtx = contexts[0];
     expect(previewCtx.scale).toHaveBeenCalledWith(-1, 1);
     expect(previewCtx.drawImage).toHaveBeenCalledWith(videoEl, -80, 0, 640, 360);
-
-    videoEl.currentTime = 0.6;
-    provider.getInputs(0.3);
     expect(provider.isMotionReady()).toBe(false);
 
-    // Once right also holds OK for >= 0.5s, 2p is ready
-    videoEl.currentTime = 0.9;
+    // Once right also detects a person, 2p is ready
+    videoEl.currentTime = 0.6;
     provider.getInputs(0.3);
     expect(provider.isMotionReady()).toBe(true);
 

@@ -102,7 +102,7 @@ describe('MenuUI', () => {
     expect(guideBtn).not.toBeNull();
     guideBtn.click();
     expect(container.textContent).toContain('모션 게임 방법');
-    expect(container.textContent).toContain('STEP BACK!');
+    expect(container.textContent).toContain('각 코트 중앙의 카메라 화면');
     container.querySelector<HTMLButtonElement>('[data-action="close-motion-guide"]')?.click();
     expect(container.textContent).not.toContain('모션 게임 방법');
 
