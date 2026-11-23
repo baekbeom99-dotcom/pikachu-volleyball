@@ -18,7 +18,6 @@ import {
   createBenDayPattern,
   drawPopPanel,
   drawPopText,
-  drawSunburst,
 } from './palette';
 import { Sprite033Renderer } from './sprite033Renderer';
 
@@ -130,23 +129,101 @@ export class PopArtSceneRenderer {
   }
 
   private drawSky(ctx: CanvasRenderingContext2D): void {
-    drawSunburst(
-      ctx,
-      WORLD.NET_X,
-      WORLD.FLOOR_Y - 120,
-      WORLD.WIDTH,
-      18,
-      '#4CE3FF',
-      POP_PALETTE.CYAN,
-    );
-
-    const benDay = createBenDayPattern(ctx, 'rgba(17, 17, 17, 0.08)', 18, 2.2);
-    if (benDay) {
-      ctx.save();
-      ctx.fillStyle = benDay;
-      ctx.fillRect(0, 0, WORLD.WIDTH, WORLD.FLOOR_Y);
-      ctx.restore();
+    ctx.save();
+    if (typeof ctx.createLinearGradient === 'function') {
+      const grad = ctx.createLinearGradient(0, 0, 0, WORLD.FLOOR_Y);
+      grad.addColorStop(0, '#17B2FF');
+      grad.addColorStop(0.55, '#59D6FF');
+      grad.addColorStop(1, '#B3F2FF');
+      ctx.fillStyle = grad;
+    } else {
+      ctx.fillStyle = '#38CCFF';
     }
+    ctx.fillRect(0, 0, WORLD.WIDTH, WORLD.FLOOR_Y);
+
+    const benDay = createBenDayPattern(ctx, 'rgba(255, 255, 255, 0.16)', 18, 2.2);
+    if (benDay) {
+      ctx.fillStyle = benDay;
+      ctx.fillRect(0, 0, WORLD.WIDTH, WORLD.FLOOR_Y * 0.65);
+    }
+
+    // Pop-Art comic sun in upper-left sky
+    this.drawPopSun(ctx, 118, 118, 34);
+
+    // Layered Pop-Art clouds with hard ink outlines and drop shadows
+    this.drawPopCloud(ctx, 215, 168, 1.0);
+    this.drawPopCloud(ctx, 446, 118, 0.82);
+    this.drawPopCloud(ctx, 704, 156, 1.06);
+    this.drawPopCloud(ctx, 598, 258, 0.68);
+    ctx.restore();
+  }
+
+  private drawPopSun(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    radius: number,
+  ): void {
+    ctx.save();
+    ctx.strokeStyle = POP_PALETTE.INK;
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    const rayCount = 8;
+    for (let i = 0; i < rayCount; i++) {
+      const angle = (i * Math.PI * 2) / rayCount;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(angle) * (radius + 8), cy + Math.sin(angle) * (radius + 8));
+      ctx.lineTo(cx + Math.cos(angle) * (radius + 19), cy + Math.sin(angle) * (radius + 19));
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = POP_PALETTE.SHADOW;
+    ctx.beginPath();
+    ctx.arc(cx + 4, cy + 4, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = POP_PALETTE.YELLOW;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawPopCloud(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    scale: number,
+  ): void {
+    const traceCloudPath = (ox: number, oy: number): void => {
+      ctx.beginPath();
+      ctx.moveTo(ox - 54, oy + 16);
+      ctx.arc(ox - 34, oy + 2, 22, Math.PI * 0.78, Math.PI * 1.85);
+      ctx.arc(ox - 4, oy - 12, 28, Math.PI * 1.12, Math.PI * 1.92);
+      ctx.arc(ox + 32, oy, 22, Math.PI * 1.32, Math.PI * 0.25);
+      ctx.lineTo(ox - 54, oy + 16);
+      ctx.closePath();
+    };
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(scale, scale);
+
+    // Hard comic offset shadow
+    ctx.fillStyle = 'rgba(17, 17, 17, 0.22)';
+    traceCloudPath(5, 5);
+    ctx.fill();
+
+    // Cream-white cloud body + thick ink outline
+    ctx.fillStyle = POP_PALETTE.CREAM;
+    ctx.strokeStyle = POP_PALETTE.INK;
+    ctx.lineWidth = 3.5;
+    ctx.lineJoin = 'round';
+    traceCloudPath(0, 0);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawMotionCameraPanel(

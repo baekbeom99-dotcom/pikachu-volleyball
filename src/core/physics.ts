@@ -344,27 +344,49 @@ function collideBallPlayer(
       Math.abs(input.moveX) > 0.05
         ? clamp(input.moveX, -1, 1)
         : clamp(player.vx / WORLD.PLAYER_MOVE_SPEED, -1, 1);
-    const towardOpponent = steer * dir;
 
-    let angleRad: number;
-    if (towardOpponent > 0.35) {
-      angleRad = 0.45; // steep downward smash
-    } else if (towardOpponent < -0.35) {
-      angleRad = -0.26; // deep corner drive
-    } else {
-      angleRad = 0.22; // flat fast spike
+    // Require genuine jump height, active swing (not late floor-fall), upper contact, and directional steer
+    const minSpikeCenterY = WORLD.FLOOR_Y - player.radius - 48;
+    const isHighEnough = player.y <= minSpikeCenterY;
+    const isStrikeTiming = player.vy <= 260;
+    const isUpperContact = ny <= 0.1;
+    const hasDirectionalSteer = Math.abs(steer) >= 0.35;
+
+    if (isHighEnough && isStrikeTiming && isUpperContact && hasDirectionalSteer) {
+      const towardOpponent = steer * dir;
+
+      let angleRad: number;
+      if (towardOpponent > 0.35) {
+        angleRad = -0.16; // fast low-arc drive that clears the net cleanly
+      } else if (towardOpponent < -0.35) {
+        angleRad = -0.4; // high backcourt corner spike
+      } else {
+        angleRad = -0.26; // balanced upward spike
+      }
+
+      ball.vx = dir * Math.cos(angleRad) * WORLD.SPIKE_SPEED;
+      ball.vy = Math.sin(angleRad) * WORLD.SPIKE_SPEED;
+      ball.isSpiked = true;
+      ball.spin = dir * 18;
+
+      player.animLock = 'spike';
+      player.animLockTimer = 0.32;
+      player.animState = 'spike';
+      player.animTime = 0;
+      events.spikedBy = player.id;
+      return;
     }
 
-    ball.vx = dir * Math.cos(angleRad) * WORLD.SPIKE_SPEED;
-    ball.vy = Math.sin(angleRad) * WORLD.SPIKE_SPEED;
-    ball.isSpiked = true;
-    ball.spin = dir * 18;
-
-    player.animLock = 'spike';
-    player.animLockTimer = 0.32;
-    player.animState = 'spike';
+    // Airborne non-spike contact: controlled upward volley
+    ball.vx = clamp(nx * 300 + player.vx * 0.45, -420, 420);
+    ball.vy = clamp(ny * 560 - 150, -720, -500);
+    ball.isSpiked = false;
+    ball.spin = ball.vx * 0.015;
+    player.animLock = 'attack';
+    player.animLockTimer = 0.22;
+    player.animState = 'attack';
     player.animTime = 0;
-    events.spikedBy = player.id;
+    events.volleyBy = player.id;
     return;
   }
 

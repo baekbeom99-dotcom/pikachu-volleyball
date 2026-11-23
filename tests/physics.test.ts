@@ -339,7 +339,84 @@ describe('stepPhysics', () => {
 
     expect(steepEvents.spikedBy).toBe('p2');
     expect(steepBall.vx).toBeLessThan(-500);
-    expect(steepBall.vy).toBeGreaterThan(200);
+    // Upward spike angle clears the net instead of slamming downward into it
+    expect(steepBall.vy).toBeLessThan(0);
+    expect(steepBall.vy).toBeGreaterThan(deepBall.vy);
+  });
+
+  it('requires sufficient jump height, timing, and steer for spike, and clears the net', () => {
+    const idle = { moveX: 0, targetX: null, jump: false };
+
+    // 1. Low jump without enough height becomes a normal airborne volley, not a spike
+    const lowP1 = createInitialPlayer('p1');
+    const lowP2 = createInitialPlayer('p2');
+    lowP1.x = 220;
+    lowP1.y = WORLD.FLOOR_Y - WORLD.PLAYER_RADIUS - 18;
+    lowP1.isGrounded = false;
+    const lowBall = createInitialBall('p1');
+    lowBall.x = 240;
+    lowBall.y = lowP1.y - 36;
+    lowBall.vy = 100;
+
+    const lowEvents = stepPhysics(
+      [lowP1, lowP2],
+      lowBall,
+      [{ moveX: 1, targetX: null, jump: false }, idle],
+      WORLD.FIXED_DT,
+    );
+    expect(lowEvents.spikedBy).toBeNull();
+    expect(lowEvents.volleyBy).toBe('p1');
+    expect(lowBall.isSpiked).toBe(false);
+
+    // 2. High jump without active directional steer also avoids accidental spike
+    const neutralP1 = createInitialPlayer('p1');
+    const neutralP2 = createInitialPlayer('p2');
+    neutralP1.x = 220;
+    neutralP1.y = 320;
+    neutralP1.isGrounded = false;
+    const neutralBall = createInitialBall('p1');
+    neutralBall.x = 240;
+    neutralBall.y = 290;
+    neutralBall.vy = 100;
+
+    const neutralEvents = stepPhysics(
+      [neutralP1, neutralP2],
+      neutralBall,
+      [idle, idle],
+      WORLD.FIXED_DT,
+    );
+    expect(neutralEvents.spikedBy).toBeNull();
+    expect(neutralEvents.volleyBy).toBe('p1');
+
+    // 3. Valid mid-court spike clears the net cleanly without hitting the net post
+    const spikeP1 = createInitialPlayer('p1');
+    const spikeP2 = createInitialPlayer('p2');
+    spikeP1.x = 260;
+    spikeP1.y = 350;
+    spikeP1.isGrounded = false;
+    const spikeBall = createInitialBall('p1');
+    spikeBall.x = 290;
+    spikeBall.y = 320;
+    spikeBall.vy = 80;
+
+    const hitEv = stepPhysics(
+      [spikeP1, spikeP2],
+      spikeBall,
+      [{ moveX: 1, targetX: null, jump: false }, idle],
+      WORLD.FIXED_DT,
+    );
+    expect(hitEv.spikedBy).toBe('p1');
+
+    let clearedNet = false;
+    for (let i = 0; i < 40; i++) {
+      const stepEv = stepPhysics([spikeP1, spikeP2], spikeBall, [idle, idle], WORLD.FIXED_DT);
+      expect(stepEv.netHit).toBe(false);
+      if (spikeBall.x > WORLD.NET_RIGHT) {
+        clearedNet = true;
+        break;
+      }
+    }
+    expect(clearedNet).toBe(true);
   });
 
   it('reflects horizontally on net post just below NET_TOP_Y without downward cap deflection', () => {

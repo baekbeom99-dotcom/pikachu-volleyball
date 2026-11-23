@@ -75,6 +75,9 @@ describe('EffectsManager', () => {
     expect(renderedTexts).toContain('NET!');
     expect(renderedTexts).toContain('POINT!');
 
+    const fontCalls = (ctx as unknown as { font: string }).font;
+    expect(fontCalls).toContain('11px');
+
     // Shake active immediately after spike/score
     vi.spyOn(Math, 'random').mockReturnValue(1);
     const initialShake = effects.getShakeOffset();
@@ -96,6 +99,37 @@ describe('EffectsManager', () => {
     expect(endCtx.fillText).not.toHaveBeenCalled();
 
     vi.restoreAllMocks();
+  });
+
+  it('positions SMASH!, POW!, and DIVE! bursts above the player so sprites are not covered', () => {
+    const effects = new EffectsManager();
+    const state = createGameState({
+      controlMode: 'touch',
+      opponentMode: 'npc',
+      initialPhase: 'READY_SERVE',
+    });
+    state.phase = 'PLAYING';
+
+    state.players[0].x = 220;
+    state.players[0].y = 380;
+    state.ball.x = 240;
+    state.ball.y = 360;
+    state.lastEvents = {
+      spikedBy: 'p1',
+      slidBy: null,
+      volleyBy: null,
+      netHit: false,
+      wallHit: false,
+      ballHitFloorSide: null,
+    };
+    effects.consumePhysicsEvents(state);
+
+    const ctx = createMockCanvas2D();
+    effects.render(ctx);
+    const translateCalls = (ctx.translate as ReturnType<typeof vi.fn>).mock.calls;
+    expect(translateCalls.length).toBeGreaterThan(0);
+    // Burst center Y must sit cleanly above the player's top edge (y - radius = 342)
+    expect(translateCalls[0][1]).toBeLessThan(state.players[0].y - state.players[0].radius);
   });
 
   it('spawns POW! on grounded volley when not spiked', () => {

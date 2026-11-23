@@ -64,8 +64,8 @@ export class EffectsManager {
 
   /** Spawns a jagged comic-starburst badge that pops in and fades over 0.65s. */
   triggerBurst(text: string, x: number, y: number, color: string): void {
-    const clampedX = clamp(x, 70, WORLD.WIDTH - 70);
-    const clampedY = clamp(y, 82, WORLD.FLOOR_Y - 26);
+    const clampedX = clamp(x, 42, WORLD.WIDTH - 42);
+    const clampedY = clamp(y, 72, WORLD.FLOOR_Y - 36);
     const tilt = ((this.burstCounter % 5) - 2) * 0.06;
     this.burstCounter += 1;
 
@@ -96,23 +96,28 @@ export class EffectsManager {
     const events = state.lastEvents;
 
     if (events.spikedBy) {
-      this.triggerBurst('SMASH!', state.ball.x, state.ball.y - 16, POP_PALETTE.MAGENTA);
+      const hitter = events.spikedBy === 'p1' ? state.players[0] : state.players[1];
+      const offsetX = events.spikedBy === 'p1' ? 26 : -26;
+      const safeY = Math.min(state.ball.y - 48, hitter.y - hitter.radius - 46);
+      this.triggerBurst('SMASH!', state.ball.x + offsetX, safeY, POP_PALETTE.MAGENTA);
       this.triggerShake(9, 0.1);
     } else if (events.volleyBy) {
-      this.triggerBurst('POW!', state.ball.x, state.ball.y - 12, POP_PALETTE.YELLOW);
+      const hitter = events.volleyBy === 'p1' ? state.players[0] : state.players[1];
+      const safeY = Math.min(state.ball.y - 44, hitter.y - hitter.radius - 44);
+      this.triggerBurst('POW!', state.ball.x, safeY, POP_PALETTE.YELLOW);
     }
 
     if (events.slidBy) {
       const slider = events.slidBy === 'p1' ? state.players[0] : state.players[1];
-      this.triggerBurst('DIVE!', slider.x, slider.y - 26, POP_PALETTE.CYAN);
+      this.triggerBurst('DIVE!', slider.x, slider.y - slider.radius - 46, POP_PALETTE.CYAN);
     }
 
     if (events.netHit) {
-      this.triggerBurst('NET!', WORLD.NET_X, WORLD.NET_TOP_Y - 18, POP_PALETTE.ORANGE);
+      this.triggerBurst('NET!', WORLD.NET_X, WORLD.NET_TOP_Y - 38, POP_PALETTE.ORANGE);
     }
 
     if (events.ballHitFloorSide) {
-      this.triggerBurst('POINT!', state.ball.x, WORLD.FLOOR_Y - 48, POP_PALETTE.RED);
+      this.triggerBurst('POINT!', state.ball.x, WORLD.FLOOR_Y - 122, POP_PALETTE.RED);
       this.triggerShake(10, 0.1);
     }
   }
@@ -203,26 +208,26 @@ export class EffectsManager {
       ctx.translate(burst.x, burst.y + floatY);
       ctx.scale(scale, scale);
 
-      // Hard comic shadow starburst
+      // Hard comic shadow starburst (50% compact size)
       ctx.fillStyle = POP_PALETTE.SHADOW;
-      drawStarburstPolygon(ctx, 4, 4, 52, 34, burst.spikes, burst.rotation);
+      drawStarburstPolygon(ctx, 2, 2, 26, 17, burst.spikes, burst.rotation);
       ctx.fill();
 
       // Colored starburst fill + thick ink outline
       ctx.fillStyle = burst.color;
       ctx.strokeStyle = POP_PALETTE.INK;
-      ctx.lineWidth = 3.5;
+      ctx.lineWidth = 2.5;
       ctx.lineJoin = 'round';
-      drawStarburstPolygon(ctx, 0, 0, 52, 34, burst.spikes, burst.rotation);
+      drawStarburstPolygon(ctx, 0, 0, 26, 17, burst.spikes, burst.rotation);
       ctx.fill();
       ctx.stroke();
 
-      drawPopText(ctx, burst.text, 0, 1, {
-        font: '900 21px Impact, "Arial Black", sans-serif',
+      drawPopText(ctx, burst.text, 0, 0.5, {
+        font: '900 11px "Russo One", "Chakra Petch", Impact, "Arial Black", sans-serif',
         fill: POP_PALETTE.CREAM,
-        strokeWidth: 4.5,
-        shadowOffsetX: 2,
-        shadowOffsetY: 2,
+        strokeWidth: 2.5,
+        shadowOffsetX: 1.5,
+        shadowOffsetY: 1.5,
       });
 
       ctx.restore();
