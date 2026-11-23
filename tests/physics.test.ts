@@ -322,6 +322,7 @@ describe('stepPhysics', () => {
     expect(deepBall.vx).toBeLessThan(-500);
     expect(deepBall.vy).toBeLessThan(0);
 
+    p2.hitCooldown = 0;
     const steepBall = createInitialBall('p2');
     steepBall.x = 610;
     steepBall.y = p2.y - 20;
@@ -628,8 +629,9 @@ describe('stepPhysics', () => {
     expect(spikeP1.animState).toBe('spike');
     expect(spikeP1.animTime).toBe(0);
 
-    // Repeated spike while still in spike state also restarts at animTime = 0
+    // Repeated spike after hitCooldown expires while still in spike state restarts at animTime = 0
     spikeP1.animTime = 0.15;
+    spikeP1.hitCooldown = 0;
     spikeBall.x = spikeP1.x + 25;
     spikeBall.y = spikeP1.y - 20;
     const spikeEv2 = stepPhysics(
@@ -642,7 +644,7 @@ describe('stepPhysics', () => {
     expect(spikeP1.animState).toBe('spike');
     expect(spikeP1.animTime).toBe(0);
 
-    // 4. attack transition (and repeated attack) resets animTime to 0
+    // 4. attack transition (and repeated attack after cooldown) resets animTime to 0
     const atkP1 = createInitialPlayer('p1');
     const atkP2 = createInitialPlayer('p2');
     atkP1.animTime = 1.9;
@@ -656,6 +658,7 @@ describe('stepPhysics', () => {
     expect(atkP1.animTime).toBe(0);
 
     atkP1.animTime = 0.12;
+    atkP1.hitCooldown = 0;
     atkBall.x = atkP1.x + 10;
     atkBall.y = atkP1.y - WORLD.PLAYER_RADIUS - WORLD.BALL_RADIUS + 8;
     atkBall.vy = 220;
@@ -663,5 +666,41 @@ describe('stepPhysics', () => {
     expect(atkEv2.volleyBy).toBe('p1');
     expect(atkP1.animState).toBe('attack');
     expect(atkP1.animTime).toBe(0);
+  });
+
+  it('prevents consecutive multi-touch hits during spike hitCooldown', () => {
+    const idle = { moveX: 0, targetX: null, jump: false };
+    const p1 = createInitialPlayer('p1');
+    const p2 = createInitialPlayer('p2');
+    p1.x = 220;
+    p1.y = 320;
+    p1.isGrounded = false;
+    const ball = createInitialBall('p1');
+    ball.x = 250;
+    ball.y = 290;
+    ball.vy = 100;
+
+    const firstEv = stepPhysics(
+      [p1, p2],
+      ball,
+      [{ moveX: 1, targetX: null, jump: false }, idle],
+      WORLD.FIXED_DT,
+    );
+    expect(firstEv.spikedBy).toBe('p1');
+    expect(p1.hitCooldown).toBe(WORLD.HIT_COOLDOWN_SPIKE);
+
+    // Even if the ball overlaps again immediately on the next few frames, no second hit triggers
+    for (let i = 0; i < 10; i++) {
+      ball.x = p1.x + 20;
+      ball.y = p1.y - 20;
+      const followEv = stepPhysics(
+        [p1, p2],
+        ball,
+        [{ moveX: 1, targetX: null, jump: false }, idle],
+        WORLD.FIXED_DT,
+      );
+      expect(followEv.spikedBy).toBeNull();
+      expect(followEv.volleyBy).toBeNull();
+    }
   });
 });

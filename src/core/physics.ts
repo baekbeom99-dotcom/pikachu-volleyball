@@ -39,6 +39,7 @@ export function createInitialPlayer(id: PlayerId): PlayerState {
     slideTimer: 0,
     slideCooldown: 0,
     slideDir: facing,
+    hitCooldown: 0,
     animState: 'idle',
     animLock: null,
     animLockTimer: 0,
@@ -77,6 +78,10 @@ function updatePlayerTimers(player: PlayerState, dt: number): void {
 
   if (player.slideCooldown > 0) {
     player.slideCooldown = Math.max(0, player.slideCooldown - dt);
+  }
+
+  if (player.hitCooldown > 0) {
+    player.hitCooldown = Math.max(0, player.hitCooldown - dt);
   }
 }
 
@@ -323,6 +328,10 @@ function collideBallPlayer(
   input: PlayerInput,
   events: PhysicsEvents,
 ): void {
+  if (player.hitCooldown > 0) {
+    return;
+  }
+
   const dx = ball.x - player.x;
   const dy = ball.y - player.y;
   const dist = Math.hypot(dx, dy);
@@ -373,6 +382,7 @@ function collideBallPlayer(
       player.animLockTimer = 0.32;
       player.animState = 'spike';
       player.animTime = 0;
+      player.hitCooldown = WORLD.HIT_COOLDOWN_SPIKE;
       events.spikedBy = player.id;
       return;
     }
@@ -386,6 +396,7 @@ function collideBallPlayer(
     player.animLockTimer = 0.22;
     player.animState = 'attack';
     player.animTime = 0;
+    player.hitCooldown = WORLD.HIT_COOLDOWN_VOLLEY;
     events.volleyBy = player.id;
     return;
   }
@@ -405,6 +416,7 @@ function collideBallPlayer(
 
   ball.isSpiked = false;
   ball.spin = ball.vx * 0.015;
+  player.hitCooldown = WORLD.HIT_COOLDOWN_VOLLEY;
   events.volleyBy = player.id;
 }
 

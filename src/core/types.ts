@@ -43,6 +43,7 @@ export interface PlayerState {
   slideTimer: number;
   slideCooldown: number;
   slideDir: 1 | -1;
+  hitCooldown: number;
   animState: CharacterAnimState;
   animLock: CharacterAnimState | null;
   animLockTimer: number;
