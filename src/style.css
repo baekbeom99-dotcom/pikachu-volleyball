@@ -71,8 +71,12 @@ body {
   z-index: 10;
 }
 
-#ui-overlay > * {
+#ui-overlay > :not(.pop-hud-bar) {
   pointer-events: auto;
+}
+
+#ui-overlay > .pop-hud-bar {
+  pointer-events: none;
 }
 
 .pop-card {
