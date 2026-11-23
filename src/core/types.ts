@@ -89,6 +89,7 @@ export interface GameState {
   serveSide: PlayerId;
   winner: PlayerId | null;
   phaseTimer: number;
+  pausedFromPhase?: 'READY_SERVE' | 'PLAYING';
   lastScorer: PlayerId | null;
   players: [PlayerState, PlayerState];
   ball: BallState;
