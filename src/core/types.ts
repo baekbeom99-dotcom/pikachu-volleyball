@@ -95,3 +95,21 @@ export interface GameState {
   ball: BallState;
   lastEvents: PhysicsEvents;
 }
+
+export interface VisualJoystick {
+  playerId: PlayerId;
+  originX: number;
+  originY: number;
+  knobX: number;
+  knobY: number;
+  maxRadius: number;
+  normX: number;
+  normY: number;
+  jumpActive: boolean;
+}
+
+export interface MotionOverlayData {
+  statuses: [MotionSideStatus, MotionSideStatus];
+  isReady: boolean;
+  error: string | null;
+}
