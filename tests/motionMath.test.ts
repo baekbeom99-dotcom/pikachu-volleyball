@@ -74,6 +74,16 @@ describe('motionMath', () => {
     expect(tracker.okHoldSeconds).toBe(0);
     expect(tracker.lastGateStatus).toBe('NO_PERSON');
 
+    const emptyArrayRes = evaluateSidePose('right', [], tracker, 1 / 60);
+    expect(emptyArrayRes).toEqual({
+      detected: false,
+      targetX: null,
+      jump: false,
+      widthRatio: 0,
+      heightRatio: 0,
+      gateStatus: 'NO_PERSON',
+    });
+
     // Only 2 visible landmarks (below minimum of 3)
     const sparse: NormalizedLandmark[] = [];
     sparse[11] = { x: 0.4, y: 0.4, visibility: 0.9 };
@@ -159,12 +169,14 @@ describe('motionMath', () => {
     // Invading landmark cluster from left side inside divider margin (< 0.14) at x = 0.06
     const invaderOnRight = evaluateSidePose(
       'right',
-      makePose({ centerX: 0.06, width: 0.12 }),
+      makePose({ centerX: 0.06, width: 0.12, minY: 0.3, maxY: 0.5 }),
       rightTracker,
       1 / 60,
     );
     expect(invaderOnRight.detected).toBe(true);
     expect(invaderOnRight.targetX).toBeCloseTo(expectedP2At065, 5);
+    expect(invaderOnRight.widthRatio).toBeCloseTo(0.36, 5);
+    expect(invaderOnRight.heightRatio).toBeCloseTo(0.65, 5);
     expect(invaderOnRight.gateStatus).toBe('OK');
     expect(invaderOnRight.jump).toBe(false);
     expect(rightTracker.smoothedCenterX).toBeCloseTo(0.65, 5);
@@ -219,6 +231,58 @@ describe('motionMath', () => {
     expect(pureRightEdge.detected).toBe(false);
     expect(pureRightEdge.targetX).toBeNull();
     expect(pureRightEdge.gateStatus).toBe('NO_PERSON');
+
+    // Sustained divider intrusion (>= 0.4s) resets anchored tracker to NO_PERSON
+    const sustainedTracker = createSideTrackerState();
+    evaluateSidePose(
+      'right',
+      makePose({ centerX: 0.65, width: 0.36, minY: 0.2, maxY: 0.85 }),
+      sustainedTracker,
+      0.6,
+    );
+    const heldShort = evaluateSidePose(
+      'right',
+      makePose({ centerX: 0.06, width: 0.1, minY: 0.3, maxY: 0.5 }),
+      sustainedTracker,
+      0.25,
+    );
+    expect(heldShort.detected).toBe(true);
+    expect(heldShort.widthRatio).toBeCloseTo(0.36, 5);
+    expect(heldShort.heightRatio).toBeCloseTo(0.65, 5);
+    expect(heldShort.gateStatus).toBe('OK');
+
+    // A valid detection resets intrusionHoldSeconds back to 0
+    evaluateSidePose(
+      'right',
+      makePose({ centerX: 0.65, width: 0.36, minY: 0.2, maxY: 0.85 }),
+      sustainedTracker,
+      1 / 60,
+    );
+    expect(sustainedTracker.intrusionHoldSeconds).toBe(0);
+
+    // Now sustain intrusion for >= 0.4s -> resets to NO_PERSON
+    evaluateSidePose(
+      'right',
+      makePose({ centerX: 0.06, width: 0.1 }),
+      sustainedTracker,
+      0.2,
+    );
+    const sustainedReset = evaluateSidePose(
+      'right',
+      makePose({ centerX: 0.06, width: 0.1 }),
+      sustainedTracker,
+      0.2,
+    );
+    expect(sustainedReset).toEqual({
+      detected: false,
+      targetX: null,
+      jump: false,
+      widthRatio: 0,
+      heightRatio: 0,
+      gateStatus: 'NO_PERSON',
+    });
+    expect(sustainedTracker.smoothedCenterX).toBeNull();
+    expect(sustainedTracker.intrusionHoldSeconds).toBe(0);
   });
 
   it('enforces distance gate hysteresis across TOO_CLOSE, OK hold duration, and deadband', () => {
@@ -366,5 +430,41 @@ describe('motionMath', () => {
     );
     expect(driftRes.jump).toBe(false);
     expect(driftTracker.baselineHipY).toBeCloseTo(0.6 + 0.04 * (0.57 - 0.6), 5);
+  });
+
+  it('completes OK distance hysteresis cleanly in 30 frames of WORLD.FIXED_DT', () => {
+    const tracker = createSideTrackerState();
+    const okPose = makePose({ centerX: 0.5, width: 0.42, minY: 0.2, maxY: 0.85 });
+
+    for (let i = 0; i < 29; i += 1) {
+      const frame = evaluateSidePose('left', okPose, tracker, WORLD.FIXED_DT);
+      expect(frame.gateStatus).toBe('TOO_CLOSE');
+    }
+
+    const frame30 = evaluateSidePose('left', okPose, tracker, WORLD.FIXED_DT);
+    expect(frame30.gateStatus).toBe('OK');
+  });
+
+  it('handles NaN landmark coordinates and non-finite dt safely', () => {
+    const tracker = createSideTrackerState();
+    const poseWithNaN = makePose({ centerX: 0.5, width: 0.4, minY: 0.2, maxY: 0.85 });
+    poseWithNaN[15] = { x: Number.NaN, y: 0.5, visibility: 0.95 };
+
+    const nanDtRes = evaluateSidePose('left', poseWithNaN, tracker, Number.NaN);
+    expect(nanDtRes.detected).toBe(true);
+    expect(Number.isFinite(nanDtRes.targetX)).toBe(true);
+    expect(Number.isFinite(nanDtRes.widthRatio)).toBe(true);
+    expect(Number.isFinite(nanDtRes.heightRatio)).toBe(true);
+    expect(tracker.okHoldSeconds).toBe(0);
+
+    // If all torso landmarks become NaN, tracker safely reports NO_PERSON without poisoning state
+    const badTorsoPose = makePose({ centerX: 0.5 });
+    for (const idx of [11, 12, 23, 24]) {
+      badTorsoPose[idx] = { x: Number.NaN, y: Number.POSITIVE_INFINITY, visibility: 0.95 };
+    }
+    const badTorsoRes = evaluateSidePose('left', badTorsoPose, tracker, -0.5);
+    expect(badTorsoRes.detected).toBe(false);
+    expect(badTorsoRes.gateStatus).toBe('NO_PERSON');
+    expect(tracker.smoothedCenterX).toBeNull();
   });
 });

@@ -13,6 +13,9 @@ export interface SideTrackerState {
   baselineHipY: number | null;
   baselineShoulderY: number | null;
   okHoldSeconds: number;
+  intrusionHoldSeconds: number;
+  lastWidthRatio: number;
+  lastHeightRatio: number;
   lastGateStatus: MotionGateStatus;
 }
 
@@ -36,9 +39,11 @@ export const OK_HEIGHT = 0.76;
 export const OK_HOLD_SECONDS = 0.5;
 export const JUMP_RISE_THRESHOLD = 0.06;
 export const HAND_UP_OFFSET = 0.04;
+export const INTRUSION_RESET_SECONDS = 0.4;
 
 const BASELINE_ALPHA = 0.04;
 const COURT_EDGE_PADDING = 8;
+const HOLD_EPSILON = 1e-9;
 
 const NOSE = 0;
 const LEFT_SHOULDER = 11;
@@ -55,7 +60,12 @@ function clamp01(value: number): number {
 }
 
 function isVisible(landmark: NormalizedLandmark | undefined): landmark is NormalizedLandmark {
-  return landmark !== undefined && (landmark.visibility === undefined || landmark.visibility >= MIN_VISIBILITY);
+  return (
+    landmark !== undefined &&
+    Number.isFinite(landmark.x) &&
+    Number.isFinite(landmark.y) &&
+    (landmark.visibility === undefined || landmark.visibility >= MIN_VISIBILITY)
+  );
 }
 
 function getVisibleByIndices(
@@ -96,6 +106,9 @@ function resetNoPerson(tracker: SideTrackerState): SidePoseEvaluation {
   tracker.baselineHipY = null;
   tracker.baselineShoulderY = null;
   tracker.okHoldSeconds = 0;
+  tracker.intrusionHoldSeconds = 0;
+  tracker.lastWidthRatio = 0;
+  tracker.lastHeightRatio = 0;
   tracker.lastGateStatus = 'NO_PERSON';
   return {
     detected: false,
@@ -111,7 +124,7 @@ function updateDistanceGate(
   tracker: SideTrackerState,
   widthRatio: number,
   heightRatio: number,
-  dt: number,
+  safeDt: number,
 ): MotionGateStatus {
   if (widthRatio > TOO_CLOSE_WIDTH || heightRatio > TOO_CLOSE_HEIGHT) {
     tracker.okHoldSeconds = 0;
@@ -123,8 +136,9 @@ function updateDistanceGate(
     if (tracker.lastGateStatus === 'OK') {
       return 'OK';
     }
-    tracker.okHoldSeconds += Math.max(0, dt);
-    tracker.lastGateStatus = tracker.okHoldSeconds >= OK_HOLD_SECONDS ? 'OK' : 'TOO_CLOSE';
+    tracker.okHoldSeconds += safeDt;
+    tracker.lastGateStatus =
+      tracker.okHoldSeconds + HOLD_EPSILON >= OK_HOLD_SECONDS ? 'OK' : 'TOO_CLOSE';
     return tracker.lastGateStatus;
   }
 
@@ -189,16 +203,25 @@ export function createSideTrackerState(): SideTrackerState {
     baselineHipY: null,
     baselineShoulderY: null,
     okHoldSeconds: 0,
+    intrusionHoldSeconds: 0,
+    lastWidthRatio: 0,
+    lastHeightRatio: 0,
     lastGateStatus: 'NO_PERSON',
   };
 }
 
+/**
+ * Evaluates a single player's pose from ROI-local normalized `[0, 1]` landmarks
+ * (with the center divider at `x = 1` for `'left'` and `x = 0` for `'right'`).
+ */
 export function evaluateSidePose(
   side: 'left' | 'right',
   landmarks: NormalizedLandmark[] | null,
   tracker: SideTrackerState,
   dt: number,
 ): SidePoseEvaluation {
+  const safeDt = Number.isFinite(dt) && dt > 0 ? dt : 0;
+
   if (!landmarks || landmarks.length === 0) {
     return resetNoPerson(tracker);
   }
@@ -244,19 +267,27 @@ export function evaluateSidePose(
 
   if (isEdgeOnlyIntrusion || isAnchorJumpIntrusion) {
     if (tracker.smoothedCenterX !== null) {
+      tracker.intrusionHoldSeconds += safeDt;
+      if (tracker.intrusionHoldSeconds + HOLD_EPSILON >= INTRUSION_RESET_SECONDS) {
+        return resetNoPerson(tracker);
+      }
       return {
         detected: true,
         targetX: mapNormalizedXToCourt(side, tracker.smoothedCenterX),
         jump: false,
-        widthRatio,
-        heightRatio,
+        widthRatio: tracker.lastWidthRatio,
+        heightRatio: tracker.lastHeightRatio,
         gateStatus: tracker.lastGateStatus,
       };
     }
     return resetNoPerson(tracker);
   }
 
-  const gateStatus = updateDistanceGate(tracker, widthRatio, heightRatio, dt);
+  tracker.intrusionHoldSeconds = 0;
+  tracker.lastWidthRatio = widthRatio;
+  tracker.lastHeightRatio = heightRatio;
+
+  const gateStatus = updateDistanceGate(tracker, widthRatio, heightRatio, safeDt);
 
   const clampedCenterX = clamp01(rawCenterX);
   tracker.smoothedCenterX =
