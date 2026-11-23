@@ -22,6 +22,7 @@ export interface MenuCallbacks {
   onReturnMenu: () => void;
   onToggleMute: () => boolean;
   onToggleModel: () => boolean;
+  onToggleFullscreen?: () => boolean;
   onSwitchToTouch: () => void;
   onRetryMotion: () => void;
 }
@@ -56,6 +57,29 @@ function createButton(
   stopPointerPropagation(btn);
   btn.addEventListener('click', onClick);
   return btn;
+}
+
+function createFullscreenSvg(isFullscreen: boolean): SVGSVGElement {
+  const svgNs = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNs, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', '18');
+  svg.setAttribute('height', '18');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2.6');
+  svg.setAttribute('stroke-linecap', 'square');
+  svg.setAttribute('stroke-linejoin', 'miter');
+
+  const path = document.createElementNS(svgNs, 'path');
+  const d = isFullscreen
+    ? 'M 9 3 V 9 H 3 M 15 3 V 9 H 21 M 21 15 H 15 V 21 M 3 15 H 9 V 21'
+    : 'M 3 9 V 3 H 9 M 15 3 H 21 V 9 M 21 15 V 21 H 15 M 9 21 H 3 V 15';
+  path.setAttribute('d', d);
+  svg.appendChild(path);
+  return svg;
 }
 
 function createOptionGroup(
@@ -97,6 +121,7 @@ export class MenuUI {
   private selections: MenuSelections;
   private screen: MenuScreen = 'MENU';
   private muted = false;
+  private fullscreen = false;
   private matchOverSummary: MatchOverSummary | null = null;
   private cameraError: string | null = null;
 
@@ -148,6 +173,15 @@ export class MenuUI {
       return;
     }
     this.muted = muted;
+    this.render();
+  }
+
+  /** Syncs the fullscreen button icon state across menu and HUD. */
+  setFullscreen(fullscreen: boolean): void {
+    if (this.fullscreen === fullscreen) {
+      return;
+    }
+    this.fullscreen = fullscreen;
     this.render();
   }
 
@@ -246,6 +280,10 @@ export class MenuUI {
     const header = document.createElement('header');
     header.className = 'pop-menu-header';
 
+    const topRightActions = document.createElement('div');
+    topRightActions.className = 'pop-menu-top-actions';
+    topRightActions.appendChild(this.buildFullscreenButton('pop-btn pop-hud-btn pop-icon-btn'));
+
     const badge = document.createElement('span');
     badge.className = 'pop-badge pop-badge--magenta';
     badge.textContent = 'POP ART EDITION';
@@ -254,7 +292,7 @@ export class MenuUI {
     title.className = 'pop-menu-title';
     title.textContent = 'PIKA VOLLEYBALL';
 
-    header.append(badge, title);
+    header.append(topRightActions, badge, title);
 
     const sections = document.createElement('div');
     sections.className = 'pop-menu-sections';
@@ -453,6 +491,12 @@ export class MenuUI {
     rightGroup.className = 'pop-hud-group';
     stopPointerPropagation(rightGroup);
 
+    const fullscreenBtn = this.buildFullscreenButton(
+      this.fullscreen
+        ? 'pop-btn pop-btn--cyan pop-hud-btn pop-icon-btn'
+        : 'pop-btn pop-hud-btn pop-icon-btn',
+    );
+
     const menuBtn = createButton(
       'MENU',
       'pop-btn pop-btn--magenta pop-hud-btn',
@@ -463,9 +507,32 @@ export class MenuUI {
       },
     );
 
-    rightGroup.appendChild(menuBtn);
+    rightGroup.append(fullscreenBtn, menuBtn);
     bar.append(leftGroup, rightGroup);
     return bar;
+  }
+
+  private buildFullscreenButton(className: string): HTMLButtonElement {
+    const btn = createButton(
+      '',
+      className,
+      () => {
+        if (this.callbacks.onToggleFullscreen) {
+          this.fullscreen = this.callbacks.onToggleFullscreen();
+        } else {
+          this.fullscreen = !this.fullscreen;
+        }
+        this.render();
+      },
+      {
+        'data-action': 'toggle-fullscreen',
+        'aria-label': this.fullscreen ? 'Exit fullscreen' : 'Enter fullscreen',
+        'aria-pressed': this.fullscreen ? 'true' : 'false',
+        title: this.fullscreen ? '전체화면 종료' : '전체화면',
+      },
+    );
+    btn.replaceChildren(createFullscreenSvg(this.fullscreen));
+    return btn;
   }
 
   private buildMatchOverModal(summary: MatchOverSummary): HTMLElement {

@@ -40,7 +40,8 @@ body {
   position: relative;
   width: 100%;
   height: 100dvh;
-  padding: 12px;
+  padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -51,7 +52,10 @@ body {
 
 .pop-stage {
   position: relative;
-  width: min(100%, calc((100dvh - 24px) * 864 / 608));
+  width: min(
+    100%,
+    calc((100dvh - max(16px, env(safe-area-inset-top) + env(safe-area-inset-bottom) + 8px)) * 864 / 608)
+  );
   aspect-ratio: 864 / 608;
   max-width: 100%;
   max-height: 100%;
@@ -185,8 +189,9 @@ body {
 
 /* --- Start Menu --- */
 .pop-menu-card {
+  position: relative;
   width: min(620px, 100%);
-  max-height: calc(100dvh - 32px);
+  max-height: calc(100% - 8px);
   overflow-y: auto;
   overscroll-behavior: contain;
   background: var(--pop-cream);
@@ -199,10 +204,20 @@ body {
 }
 
 .pop-menu-header {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
+  gap: 6px;
+}
+
+.pop-menu-top-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
   gap: 6px;
 }
 
@@ -336,6 +351,18 @@ body {
   box-shadow: var(--pop-shadow-sm);
 }
 
+.pop-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 9px;
+  min-width: 36px;
+}
+
+.pop-icon-btn svg {
+  display: block;
+}
+
 /* --- Modals (Match Over & Camera Error) --- */
 .pop-modal-backdrop {
   position: absolute;
@@ -421,5 +448,95 @@ body {
     padding: 4px 9px;
     font-size: 0.78rem;
     min-height: 32px;
+  }
+
+  .pop-icon-btn {
+    padding: 4px 7px;
+    min-width: 32px;
+  }
+}
+
+@media (max-height: 520px) {
+  .pop-menu-card {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+
+  .pop-menu-title {
+    font-size: 1.55rem;
+    -webkit-text-stroke: 4px var(--pop-ink);
+  }
+
+  .pop-menu-sections {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .pop-choice-btn {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+
+  .pop-hint-box {
+    padding: 6px 10px;
+    font-size: 0.72rem;
+    gap: 4px;
+  }
+
+  .pop-start-btn {
+    padding: 10px 18px;
+    font-size: 1.1rem;
+  }
+}
+
+/* --- Landscape-only orientation gate --- */
+.pop-rotate-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  padding: 24px;
+  align-items: center;
+  justify-content: center;
+  background-color: #22bfff;
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.24) 2px, transparent 2px),
+    linear-gradient(180deg, #17b2ff 0%, #7ee3ff 100%);
+  background-size: 18px 18px, 100% 100%;
+  z-index: 100;
+}
+
+.pop-rotate-card {
+  width: min(360px, 100%);
+  background: var(--pop-cream);
+  border: var(--pop-border);
+  box-shadow: var(--pop-shadow-lg);
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+}
+
+.pop-rotate-title {
+  margin: 0;
+  font-size: 1.3rem;
+  color: var(--pop-ink);
+}
+
+.pop-rotate-desc {
+  margin: 0;
+  font-family: 'Noto Sans KR', system-ui, sans-serif;
+  font-size: 0.9rem;
+  color: var(--pop-ink);
+}
+
+@media (orientation: portrait) {
+  .pop-stage {
+    display: none;
+  }
+
+  .pop-rotate-overlay {
+    display: flex;
   }
 }

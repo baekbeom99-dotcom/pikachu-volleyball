@@ -196,6 +196,9 @@ export function startApp(): () => void {
       usePlaceholderModel = !usePlaceholderModel;
       return usePlaceholderModel;
     },
+    onToggleFullscreen: () => {
+      return toggleFullscreen();
+    },
     onSwitchToTouch: () => {
       audio.unlock();
       disposeMotionProvider();
@@ -223,6 +226,79 @@ export function startApp(): () => void {
     },
   });
 
+  const isFullscreenActive = (): boolean => {
+    const doc = document as Document & { webkitFullscreenElement?: Element | null };
+    return Boolean(document.fullscreenElement ?? doc.webkitFullscreenElement);
+  };
+
+  const lockLandscapeOrientation = (): void => {
+    const orientation = screen?.orientation as
+      | { lock?: (mode: string) => Promise<void> }
+      | undefined;
+    if (orientation && typeof orientation.lock === 'function') {
+      void orientation.lock('landscape').catch(() => {});
+    }
+  };
+
+  const unlockOrientation = (): void => {
+    const orientation = screen?.orientation as
+      | { unlock?: () => void }
+      | undefined;
+    try {
+      orientation?.unlock?.();
+    } catch {
+      // Ignore unsupported orientation unlock errors.
+    }
+  };
+
+  const toggleFullscreen = (): boolean => {
+    const doc = document as Document & {
+      webkitFullscreenElement?: Element | null;
+      webkitExitFullscreen?: () => Promise<void> | void;
+    };
+    const root = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => Promise<void> | void;
+    };
+
+    const currentlyFull = isFullscreenActive();
+    try {
+      if (currentlyFull) {
+        if (typeof document.exitFullscreen === 'function') {
+          void document.exitFullscreen().catch(() => {});
+        } else if (typeof doc.webkitExitFullscreen === 'function') {
+          void doc.webkitExitFullscreen();
+        }
+        unlockOrientation();
+        return false;
+      }
+
+      if (typeof root.requestFullscreen === 'function') {
+        void root
+          .requestFullscreen()
+          .then(() => lockLandscapeOrientation())
+          .catch(() => {});
+      } else if (typeof root.webkitRequestFullscreen === 'function') {
+        void root.webkitRequestFullscreen();
+        lockLandscapeOrientation();
+      }
+      return true;
+    } catch {
+      return currentlyFull;
+    }
+  };
+
+  const handleFullscreenChange = (): void => {
+    const active = isFullscreenActive();
+    menuUI.setFullscreen(active);
+    if (active) {
+      lockLandscapeOrientation();
+    }
+    syncCanvasResolution();
+  };
+
+  document.addEventListener('fullscreenchange', handleFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+
   const handleAudioUnlock = (): void => {
     audio.unlock();
   };
@@ -236,6 +312,7 @@ export function startApp(): () => void {
 
   const stepFixed = (dt: number): void => {
     if (state.phase === 'MENU') {
+      sceneRenderer.sky.update(dt);
       return;
     }
 
@@ -267,6 +344,8 @@ export function startApp(): () => void {
     stepGame(state, [p1Input, p2Input], dt, motionReady);
     effects.consumePhysicsEvents(state);
     effects.update(dt);
+    sceneRenderer.sky.update(dt);
+    sceneRenderer.sky.consumeGameState(state);
     audio.consumeEvents(state, prevPhase);
 
     if (state.controlMode === 'motion' && motionProvider) {
@@ -339,6 +418,8 @@ export function startApp(): () => void {
     window.removeEventListener('resize', syncCanvasResolution);
     window.removeEventListener('pointerdown', handleAudioUnlock);
     window.removeEventListener('keydown', handleAudioUnlock);
+    document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
     disposeMotionProvider();
     touchProvider.dispose();
     keyboardProvider.dispose();

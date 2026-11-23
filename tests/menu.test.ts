@@ -214,4 +214,47 @@ describe('MenuUI', () => {
 
     ui.dispose();
   });
+
+  it('renders SVG fullscreen icon toggle in both MENU and IN_GAME HUD and syncs state', () => {
+    const container = document.createElement('div');
+    let isFull = false;
+    const onToggleFullscreen = vi.fn(() => {
+      isFull = !isFull;
+      return isFull;
+    });
+
+    const ui = new MenuUI(container, {
+      onStartMatch: vi.fn(),
+      onRematch: vi.fn(),
+      onReturnMenu: vi.fn(),
+      onToggleMute: () => false,
+      onToggleModel: () => false,
+      onToggleFullscreen,
+      onSwitchToTouch: vi.fn(),
+      onRetryMotion: vi.fn(),
+    });
+
+    const menuFullBtn = container.querySelector<HTMLButtonElement>('[data-action="toggle-fullscreen"]')!;
+    expect(menuFullBtn).not.toBeNull();
+    expect(menuFullBtn.querySelector('svg')).not.toBeNull();
+    expect(menuFullBtn.getAttribute('aria-pressed')).toBe('false');
+
+    menuFullBtn.click();
+    expect(onToggleFullscreen).toHaveBeenCalledTimes(1);
+    expect(
+      container.querySelector<HTMLButtonElement>('[data-action="toggle-fullscreen"]')!.getAttribute('aria-pressed'),
+    ).toBe('true');
+
+    ui.setScreen('IN_GAME');
+    const hudFullBtn = container.querySelector<HTMLButtonElement>('[data-action="toggle-fullscreen"]')!;
+    expect(hudFullBtn.querySelector('svg')).not.toBeNull();
+    expect(hudFullBtn.getAttribute('aria-pressed')).toBe('true');
+
+    ui.setFullscreen(false);
+    expect(
+      container.querySelector<HTMLButtonElement>('[data-action="toggle-fullscreen"]')!.getAttribute('aria-pressed'),
+    ).toBe('false');
+
+    ui.dispose();
+  });
 });
