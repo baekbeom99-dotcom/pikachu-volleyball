@@ -96,6 +96,7 @@ export interface GameState {
   lastEvents: PhysicsEvents;
 }
 
+/** Active virtual joystick state for Pop-Art canvas rendering (coordinates in element CSS pixels). */
 export interface VisualJoystick {
   playerId: PlayerId;
   originX: number;

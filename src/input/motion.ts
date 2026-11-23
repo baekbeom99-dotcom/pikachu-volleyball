@@ -1,4 +1,5 @@
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
+import { WORLD } from '../core/constants';
 import type {
   MotionOverlayData,
   MotionSideStatus,
@@ -18,20 +19,28 @@ const WASM_BASE_URL =
 const POSE_MODEL_URL =
   'https://storage.googleapis.com/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 
-const PREVIEW_WIDTH = 640;
-const PREVIEW_HEIGHT = 240;
-const ROI_WIDTH = 320;
-const ROI_HEIGHT = 240;
+const PREVIEW_WIDTH = 480;
+const PREVIEW_HEIGHT = 360;
+const ROI_WIDTH = 240;
+const ROI_HEIGHT = 360;
 
+const COURT_EDGE_PADDING = 8;
+const P1_MARGIN = WORLD.PLAYER_RADIUS + COURT_EDGE_PADDING;
+const P1_MIN_X = P1_MARGIN;
+const P1_MAX_X = WORLD.NET_LEFT - P1_MARGIN;
+const P2_MIN_X = WORLD.NET_RIGHT + P1_MARGIN;
+const P2_MAX_X = WORLD.WIDTH - P1_MARGIN;
+
+type Side = 'left' | 'right';
 type VisionFileset = Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>;
 
 export interface MotionInputOptions {
   videoEl: HTMLVideoElement;
   opponentMode: OpponentMode;
-  activeSide?: 'left' | 'right';
+  activeSide?: Side;
 }
 
-function createInitialSideStatus(side: 'left' | 'right'): MotionSideStatus {
+function createInitialSideStatus(side: Side): MotionSideStatus {
   return {
     side,
     detected: false,
@@ -58,6 +67,42 @@ function createOffscreenCanvas(
   return { canvas, ctx };
 }
 
+function drawMirroredAspectFit(
+  ctx: CanvasRenderingContext2D,
+  video: HTMLVideoElement,
+  destWidth: number,
+  destHeight: number,
+): void {
+  const srcWidth = video.videoWidth;
+  const srcHeight = video.videoHeight;
+  if (srcWidth <= 0 || srcHeight <= 0) {
+    return;
+  }
+
+  const scale = Math.max(destWidth / srcWidth, destHeight / srcHeight);
+  const drawWidth = srcWidth * scale;
+  const drawHeight = srcHeight * scale;
+  const dx = (destWidth - drawWidth) * 0.5;
+  const dy = (destHeight - drawHeight) * 0.5;
+
+  ctx.save();
+  ctx.clearRect(0, 0, destWidth, destHeight);
+  ctx.translate(destWidth, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(video, dx, dy, drawWidth, drawHeight);
+  ctx.restore();
+}
+
+function projectRightTargetToP1Court(rightTargetX: number | null): number | null {
+  if (rightTargetX === null) {
+    return null;
+  }
+  const span = P2_MAX_X - P2_MIN_X;
+  const ratio = span > 0 ? (rightTargetX - P2_MIN_X) / span : 0.5;
+  const clamped = Math.max(0, Math.min(1, ratio));
+  return P1_MIN_X + clamped * (P1_MAX_X - P1_MIN_X);
+}
+
 function formatMotionError(err: unknown): string {
   const name = err instanceof Error ? err.name : '';
   const message = err instanceof Error ? err.message : String(err);
@@ -79,20 +124,20 @@ function formatMotionError(err: unknown): string {
 
 /**
  * Dual-ROI MediaPipe PoseLandmarker provider.
- * Mirrors webcam input into a 640x240 buffer, crops 0..320 (P1) and 320..640 (P2),
- * and runs independent single-pose landmarkers per active side.
+ * Mirrors webcam input into an aspect-preserving 480x360 buffer, crops 0..240 (left)
+ * and 240..480 (right), and runs independent single-pose landmarkers per active side.
  */
 export class MotionInputProvider implements InputProvider {
   private readonly videoEl: HTMLVideoElement;
   private opponentMode: OpponentMode;
-  readonly activeSide: 'left' | 'right';
+  readonly activeSide: Side;
 
   private stream: MediaStream | null = null;
   private visionFileset: VisionFileset | null = null;
   private leftLandmarker: PoseLandmarker | null = null;
   private rightLandmarker: PoseLandmarker | null = null;
   private initPromise: Promise<void> | null = null;
-  private rightInitPromise: Promise<void> | null = null;
+  private secondaryInitPromise: Promise<void> | null = null;
 
   private previewCanvas: HTMLCanvasElement | null = null;
   private previewCtx: CanvasRenderingContext2D | null = null;
@@ -113,7 +158,8 @@ export class MotionInputProvider implements InputProvider {
   private lastVideoTime = -1;
   private lastTimestampMs = -1;
   private pendingEvalDt = 0;
-  private errorMessage: string | null = null;
+  private initError: string | null = null;
+  private secondaryInitError: string | null = null;
   private initialized = false;
   private disposed = false;
 
@@ -121,6 +167,18 @@ export class MotionInputProvider implements InputProvider {
     this.videoEl = options.videoEl;
     this.opponentMode = options.opponentMode;
     this.activeSide = options.activeSide ?? 'left';
+  }
+
+  private getLandmarker(side: Side): PoseLandmarker | null {
+    return side === 'left' ? this.leftLandmarker : this.rightLandmarker;
+  }
+
+  private setLandmarker(side: Side, landmarker: PoseLandmarker | null): void {
+    if (side === 'left') {
+      this.leftLandmarker = landmarker;
+    } else {
+      this.rightLandmarker = landmarker;
+    }
   }
 
   private async createPoseLandmarker(fileset: VisionFileset): Promise<PoseLandmarker> {
@@ -150,34 +208,35 @@ export class MotionInputProvider implements InputProvider {
     }
   }
 
-  private async ensureRightLandmarker(): Promise<void> {
+  private async ensureSecondaryLandmarker(side: Side): Promise<void> {
     if (
       this.disposed ||
-      this.rightLandmarker !== null ||
+      this.getLandmarker(side) !== null ||
       this.visionFileset === null
     ) {
       return;
     }
-    if (this.rightInitPromise) {
-      return this.rightInitPromise;
+    if (this.secondaryInitPromise) {
+      return this.secondaryInitPromise;
     }
 
-    this.rightInitPromise = (async () => {
+    this.secondaryInitPromise = (async () => {
       try {
         const landmarker = await this.createPoseLandmarker(this.visionFileset!);
         if (this.disposed) {
           landmarker.close();
           return;
         }
-        this.rightLandmarker = landmarker;
+        this.setLandmarker(side, landmarker);
+        this.secondaryInitError = null;
       } catch (err) {
-        this.errorMessage = formatMotionError(err);
+        this.secondaryInitError = formatMotionError(err);
       } finally {
-        this.rightInitPromise = null;
+        this.secondaryInitPromise = null;
       }
     })();
 
-    return this.rightInitPromise;
+    return this.secondaryInitPromise;
   }
 
   /** Requests webcam access and initializes MediaPipe PoseLandmarker instances. */
@@ -198,13 +257,14 @@ export class MotionInputProvider implements InputProvider {
   }
 
   private async runInit(): Promise<void> {
-    this.errorMessage = null;
+    this.initError = null;
+    this.secondaryInitError = null;
 
     if (
       typeof navigator === 'undefined' ||
       !navigator.mediaDevices?.getUserMedia
     ) {
-      this.errorMessage =
+      this.initError =
         '이 브라우저는 웹캠을 지원하지 않습니다. 터치패드 모드를 사용해 주세요. (Webcam API unavailable)';
       return;
     }
@@ -213,7 +273,7 @@ export class MotionInputProvider implements InputProvider {
     const leftRoi = createOffscreenCanvas(ROI_WIDTH, ROI_HEIGHT);
     const rightRoi = createOffscreenCanvas(ROI_WIDTH, ROI_HEIGHT);
     if (!preview || !leftRoi || !rightRoi) {
-      this.errorMessage =
+      this.initError =
         '캔버스 컨텍스트를 생성할 수 없습니다. (Canvas 2D context unavailable)';
       return;
     }
@@ -260,54 +320,103 @@ export class MotionInputProvider implements InputProvider {
       }
       this.visionFileset = fileset;
 
-      const leftLandmarker = await this.createPoseLandmarker(fileset);
+      const primarySide: Side = this.activeSide;
+      const secondarySide: Side = primarySide === 'left' ? 'right' : 'left';
+
+      const primaryLandmarker = await this.createPoseLandmarker(fileset);
       if (this.disposed) {
-        leftLandmarker.close();
+        primaryLandmarker.close();
         this.stopMediaTracks();
         return;
       }
-      this.leftLandmarker = leftLandmarker;
+      this.setLandmarker(primarySide, primaryLandmarker);
 
       if (this.opponentMode === '2p') {
-        const rightLandmarker = await this.createPoseLandmarker(fileset);
+        const secondaryLandmarker = await this.createPoseLandmarker(fileset);
         if (this.disposed) {
-          rightLandmarker.close();
+          secondaryLandmarker.close();
+          this.closeLandmarkers();
           this.stopMediaTracks();
           return;
         }
-        this.rightLandmarker = rightLandmarker;
+        this.setLandmarker(secondarySide, secondaryLandmarker);
       }
 
       this.initialized = true;
     } catch (err) {
-      this.errorMessage = formatMotionError(err);
+      this.initError = formatMotionError(err);
+      this.closeLandmarkers();
+      this.visionFileset = null;
       this.stopMediaTracks();
     }
   }
 
-  /** Switches between 1P ('npc') and 2P ('2p') mode, lazy-initializing P2 landmarker if needed. */
+  /** Switches between 1P ('npc') and 2P ('2p') mode, lazy-initializing missing landmarker if needed. */
   setOpponentMode(mode: OpponentMode): void {
     if (this.opponentMode === mode) {
       return;
     }
     this.opponentMode = mode;
+
+    if (mode === 'npc') {
+      this.secondaryInitError = null;
+      const inactiveSide: Side = this.activeSide === 'left' ? 'right' : 'left';
+      if (inactiveSide === 'left') {
+        this.leftTracker = createSideTrackerState();
+        this.cachedStatuses[0] = createInitialSideStatus('left');
+      } else {
+        this.rightTracker = createSideTrackerState();
+        this.cachedStatuses[1] = createInitialSideStatus('right');
+      }
+      this.cachedInputs[1] = idleInput();
+      return;
+    }
+
+    this.secondaryInitError = null;
     this.rightTracker = createSideTrackerState();
     this.cachedInputs[1] = idleInput();
     this.cachedStatuses[1] = createInitialSideStatus('right');
+    if (this.activeSide === 'right') {
+      this.leftTracker = createSideTrackerState();
+      this.cachedInputs[0] = idleInput();
+      this.cachedStatuses[0] = createInitialSideStatus('left');
+    }
 
-    if (mode === '2p' && this.initialized && !this.rightLandmarker) {
-      void this.ensureRightLandmarker();
+    if (this.initialized) {
+      const missingSide: Side | null =
+        this.leftLandmarker === null
+          ? 'left'
+          : this.rightLandmarker === null
+            ? 'right'
+            : null;
+      if (missingSide !== null) {
+        void this.ensureSecondaryLandmarker(missingSide);
+      }
     }
   }
 
   private evaluateSingleRoi(
-    side: 'left' | 'right',
+    side: Side,
     landmarker: PoseLandmarker,
     roiCanvas: HTMLCanvasElement,
+    roiCtx: CanvasRenderingContext2D,
     tracker: SideTrackerState,
     timestampMs: number,
     dt: number,
   ): { input: PlayerInput; status: MotionSideStatus } {
+    const sx = side === 'left' ? 0 : ROI_WIDTH;
+    roiCtx.drawImage(
+      this.previewCanvas!,
+      sx,
+      0,
+      ROI_WIDTH,
+      ROI_HEIGHT,
+      0,
+      0,
+      ROI_WIDTH,
+      ROI_HEIGHT,
+    );
+
     let landmarks: NormalizedLandmark[] | null = null;
     try {
       const result = landmarker.detectForVideo(roiCanvas, timestampMs);
@@ -338,8 +447,8 @@ export class MotionInputProvider implements InputProvider {
   getInputs(dt: number): [PlayerInput, PlayerInput] {
     if (
       this.disposed ||
-      this.errorMessage ||
-      !this.leftLandmarker ||
+      this.getError() !== null ||
+      !this.initialized ||
       !this.previewCanvas ||
       !this.previewCtx ||
       !this.leftRoiCanvas ||
@@ -373,66 +482,82 @@ export class MotionInputProvider implements InputProvider {
     const nowMs = Math.max(this.lastTimestampMs + 1, Math.round(performance.now()));
     this.lastTimestampMs = nowMs;
 
-    // Mirror webcam feed horizontally into 640x240 split preview buffer.
-    this.previewCtx.save();
-    this.previewCtx.translate(PREVIEW_WIDTH, 0);
-    this.previewCtx.scale(-1, 1);
-    this.previewCtx.drawImage(this.videoEl, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
-    this.previewCtx.restore();
-
-    // Crop left half (0..320) for P1.
-    this.leftRoiCtx.drawImage(
-      this.previewCanvas,
-      0,
-      0,
-      ROI_WIDTH,
-      ROI_HEIGHT,
-      0,
-      0,
-      ROI_WIDTH,
-      ROI_HEIGHT,
+    drawMirroredAspectFit(
+      this.previewCtx,
+      this.videoEl,
+      PREVIEW_WIDTH,
+      PREVIEW_HEIGHT,
     );
 
-    const leftOut = this.evaluateSingleRoi(
-      'left',
-      this.leftLandmarker,
-      this.leftRoiCanvas,
-      this.leftTracker,
-      nowMs,
-      evalDt,
-    );
-    this.cachedInputs[0] = leftOut.input;
-    this.cachedStatuses[0] = leftOut.status;
-
-    if (this.opponentMode === '2p') {
-      // Crop right half (320..640) for P2.
-      this.rightRoiCtx.drawImage(
-        this.previewCanvas,
-        ROI_WIDTH,
-        0,
-        ROI_WIDTH,
-        ROI_HEIGHT,
-        0,
-        0,
-        ROI_WIDTH,
-        ROI_HEIGHT,
-      );
-
-      if (this.rightLandmarker) {
-        const rightOut = this.evaluateSingleRoi(
-          'right',
-          this.rightLandmarker,
-          this.rightRoiCanvas,
-          this.rightTracker,
-          nowMs,
-          evalDt,
-        );
-        this.cachedInputs[1] = rightOut.input;
-        this.cachedStatuses[1] = rightOut.status;
-      } else {
-        this.cachedInputs[1] = idleInput();
+    if (this.opponentMode === 'npc') {
+      if (this.activeSide === 'left') {
+        if (this.leftLandmarker) {
+          const leftOut = this.evaluateSingleRoi(
+            'left',
+            this.leftLandmarker,
+            this.leftRoiCanvas,
+            this.leftRoiCtx,
+            this.leftTracker,
+            nowMs,
+            evalDt,
+          );
+          this.cachedInputs[0] = leftOut.input;
+          this.cachedStatuses[0] = leftOut.status;
+        }
         this.cachedStatuses[1] = createInitialSideStatus('right');
+      } else {
+        if (this.rightLandmarker) {
+          const rightOut = this.evaluateSingleRoi(
+            'right',
+            this.rightLandmarker,
+            this.rightRoiCanvas,
+            this.rightRoiCtx,
+            this.rightTracker,
+            nowMs,
+            evalDt,
+          );
+          this.cachedInputs[0] = {
+            moveX: 0,
+            targetX: projectRightTargetToP1Court(rightOut.input.targetX),
+            jump: rightOut.input.jump,
+          };
+          this.cachedStatuses[1] = rightOut.status;
+        }
+        this.cachedStatuses[0] = createInitialSideStatus('left');
       }
+      this.cachedInputs[1] = idleInput();
+      return [this.cachedInputs[0], this.cachedInputs[1]];
+    }
+
+    if (this.leftLandmarker) {
+      const leftOut = this.evaluateSingleRoi(
+        'left',
+        this.leftLandmarker,
+        this.leftRoiCanvas,
+        this.leftRoiCtx,
+        this.leftTracker,
+        nowMs,
+        evalDt,
+      );
+      this.cachedInputs[0] = leftOut.input;
+      this.cachedStatuses[0] = leftOut.status;
+    } else {
+      this.cachedInputs[0] = idleInput();
+      this.cachedStatuses[0] = createInitialSideStatus('left');
+    }
+
+    if (this.rightLandmarker) {
+      const rightOut = this.evaluateSingleRoi(
+        'right',
+        this.rightLandmarker,
+        this.rightRoiCanvas,
+        this.rightRoiCtx,
+        this.rightTracker,
+        nowMs,
+        evalDt,
+      );
+      this.cachedInputs[1] = rightOut.input;
+      this.cachedStatuses[1] = rightOut.status;
     } else {
       this.cachedInputs[1] = idleInput();
       this.cachedStatuses[1] = createInitialSideStatus('right');
@@ -443,14 +568,18 @@ export class MotionInputProvider implements InputProvider {
 
   /** Returns true when all active human player sides satisfy the distance gate ('OK'). */
   isMotionReady(): boolean {
-    if (this.disposed || this.errorMessage !== null) {
+    if (this.disposed || this.getError() !== null) {
       return false;
     }
-    const leftOk = this.cachedStatuses[0].gateStatus === 'OK';
     if (this.opponentMode === '2p') {
-      return leftOk && this.cachedStatuses[1].gateStatus === 'OK';
+      return (
+        this.cachedStatuses[0].gateStatus === 'OK' &&
+        this.cachedStatuses[1].gateStatus === 'OK'
+      );
     }
-    return leftOk;
+    const activeStatus =
+      this.activeSide === 'left' ? this.cachedStatuses[0] : this.cachedStatuses[1];
+    return activeStatus.gateStatus === 'OK';
   }
 
   /** Returns the latest distance/detection statuses for [left, right] ROIs. */
@@ -463,18 +592,24 @@ export class MotionInputProvider implements InputProvider {
     return {
       statuses: this.getSideStatuses(),
       isReady: this.isMotionReady(),
-      error: this.errorMessage,
+      error: this.getError(),
     };
   }
 
-  /** Returns the mirrored 640x240 preview canvas for HUD display, or null if uninitialized. */
+  /** Returns the mirrored 480x360 preview canvas for HUD display, or null if uninitialized. */
   getPreviewCanvas(): HTMLCanvasElement | null {
     return this.previewCanvas;
   }
 
-  /** Returns a user-facing error message if webcam or MediaPipe initialization failed. */
+  /** Returns a user-facing error message if webcam or active MediaPipe initialization failed. */
   getError(): string | null {
-    return this.errorMessage;
+    if (this.initError !== null) {
+      return this.initError;
+    }
+    if (this.opponentMode === '2p' && this.secondaryInitError !== null) {
+      return this.secondaryInitError;
+    }
+    return null;
   }
 
   private stopMediaTracks(): void {
@@ -493,14 +628,7 @@ export class MotionInputProvider implements InputProvider {
     }
   }
 
-  /** Stops webcam tracks and closes both PoseLandmarker instances. */
-  dispose(): void {
-    if (this.disposed) {
-      return;
-    }
-    this.disposed = true;
-    this.stopMediaTracks();
-
+  private closeLandmarkers(): void {
     if (this.leftLandmarker) {
       try {
         this.leftLandmarker.close();
@@ -518,6 +646,16 @@ export class MotionInputProvider implements InputProvider {
       }
       this.rightLandmarker = null;
     }
+  }
+
+  /** Stops webcam tracks and closes both PoseLandmarker instances. */
+  dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    this.stopMediaTracks();
+    this.closeLandmarkers();
 
     this.visionFileset = null;
     this.previewCanvas = null;

@@ -139,5 +139,54 @@ describe('TouchJoystickProvider', () => {
     expect(listeners.get('pointermove')?.size ?? 0).toBe(0);
     expect(listeners.get('pointerup')?.size ?? 0).toBe(0);
     expect(listeners.get('pointercancel')?.size ?? 0).toBe(0);
+    expect(listeners.get('lostpointercapture')?.size ?? 0).toBe(0);
+  });
+
+  it('rejects NaN / non-positive viewportWidth, resets on setOpponentMode, and skips setPointerCapture on rejected touches', () => {
+    const provider = new TouchJoystickProvider('2p');
+    expect(provider.handlePointerDown(1, Number.NaN, 200, 800)).toBe(false);
+    expect(provider.handlePointerDown(1, 200, 200, 0)).toBe(false);
+    expect(provider.handlePointerDown(1, 200, 200, 800)).toBe(true);
+    // Second touch in same P1 half is rejected
+    expect(provider.handlePointerDown(2, 220, 220, 800)).toBe(false);
+
+    // Non-finite move is ignored without corrupting joystick state
+    provider.handlePointerMove(1, Number.NaN, 220);
+    expect(provider.getVisualJoysticks()[0].normX).toBe(0);
+
+    // Switching mode clears active joysticks
+    provider.setOpponentMode('npc');
+    expect(provider.getVisualJoysticks()).toHaveLength(0);
+
+    // DOM attach: rejected pointerdown does not call setPointerCapture; lostpointercapture clears joystick
+    const listeners = new Map<string, Set<(e: unknown) => void>>();
+    const setPointerCapture = vi.fn();
+    const fakeElement = {
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
+      setPointerCapture,
+      addEventListener: (type: string, cb: (e: unknown) => void) => {
+        if (!listeners.has(type)) listeners.set(type, new Set());
+        listeners.get(type)!.add(cb);
+      },
+      removeEventListener: (type: string, cb: (e: unknown) => void) => {
+        listeners.get(type)?.delete(cb);
+      },
+    } as unknown as HTMLElement;
+
+    provider.attach(fakeElement);
+    const fire = (type: string, event: Record<string, unknown>) => {
+      for (const cb of listeners.get(type) ?? []) {
+        cb(event);
+      }
+    };
+
+    fire('pointerdown', { pointerId: 10, clientX: 200, clientY: 300 });
+    expect(setPointerCapture).toHaveBeenCalledTimes(1);
+    fire('pointerdown', { pointerId: 11, clientX: 250, clientY: 300 });
+    expect(setPointerCapture).toHaveBeenCalledTimes(1);
+
+    fire('lostpointercapture', { pointerId: 10 });
+    expect(provider.getVisualJoysticks()).toHaveLength(0);
+    provider.dispose();
   });
 });

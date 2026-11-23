@@ -29,16 +29,18 @@ export class TouchJoystickProvider implements InputProvider {
     const el = this.attachedElement;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    this.handlePointerDown(
+    const accepted = this.handlePointerDown(
       event.pointerId,
       event.clientX - rect.left,
       event.clientY - rect.top,
       rect.width,
     );
-    try {
-      el.setPointerCapture?.(event.pointerId);
-    } catch {
-      // Ignore capture errors on synthetic or unsupported pointer events.
+    if (accepted) {
+      try {
+        el.setPointerCapture?.(event.pointerId);
+      } catch {
+        // Ignore capture errors on synthetic or unsupported pointer events.
+      }
     }
   };
 
@@ -89,21 +91,22 @@ export class TouchJoystickProvider implements InputProvider {
     clientX: number,
     clientY: number,
     viewportWidth: number,
-  ): void {
+  ): boolean {
     if (
       !Number.isFinite(clientX) ||
       !Number.isFinite(clientY) ||
       !Number.isFinite(viewportWidth) ||
+      viewportWidth <= 0 ||
       this.joysticks.has(pointerId)
     ) {
-      return;
+      return false;
     }
 
     const playerId: PlayerId =
       this.mode === 'npc' ? 'p1' : clientX < viewportWidth * 0.5 ? 'p1' : 'p2';
 
     if (this.hasActivePlayer(playerId)) {
-      return;
+      return false;
     }
 
     this.joysticks.set(pointerId, {
@@ -116,6 +119,7 @@ export class TouchJoystickProvider implements InputProvider {
       normY: 0,
       jumpActive: false,
     });
+    return true;
   }
 
   /** Updates the joystick knob position with circular clamping to maxRadius. */

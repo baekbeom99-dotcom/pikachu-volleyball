@@ -1,6 +1,8 @@
 import type { OpponentMode, PlayerInput } from '../core/types';
 import { idleInput, type InputProvider } from './types';
 
+const PREVENT_DEFAULT_CODES = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp']);
+
 /**
  * Keyboard input provider supporting WASD (P1) and Arrow keys
  * (shared P1 in 1P/NPC mode, or independent P2 in 2P mode).
@@ -11,6 +13,9 @@ export class KeyboardInputProvider implements InputProvider {
   private disposed = false;
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (PREVENT_DEFAULT_CODES.has(event.code)) {
+      event.preventDefault();
+    }
     this.pressedKeys.add(event.code);
   };
 
