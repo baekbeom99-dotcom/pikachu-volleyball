@@ -32,15 +32,15 @@ export function predictBallLandingX(ball: BallState, maxSteps = 120): number {
 
     if (y - radius < 0) {
       y = radius;
-      vy = Math.abs(vy) * 0.85;
+      vy = Math.abs(vy) * WORLD.BALL_WALL_RESTITUTION;
     }
 
     if (x - radius < 0) {
       x = radius;
-      vx = Math.abs(vx) * 0.85;
+      vx = Math.abs(vx) * WORLD.BALL_WALL_RESTITUTION;
     } else if (x + radius > WORLD.WIDTH) {
       x = WORLD.WIDTH - radius;
-      vx = -Math.abs(vx) * 0.85;
+      vx = -Math.abs(vx) * WORLD.BALL_WALL_RESTITUTION;
     }
 
     if (y + radius >= WORLD.FLOOR_Y) {
@@ -73,7 +73,8 @@ export function computeNpcInput(
   const homeX = isP2
     ? (WORLD.NET_RIGHT + WORLD.WIDTH) / 2
     : WORLD.NET_LEFT / 2;
-  const outwardOffset = isP2 ? 14 : -14;
+  const outwardSign = isP2 ? 1 : -1;
+  const outwardOffset = outwardSign * 14;
   const opponentDir = isP2 ? -1 : 1;
 
   const isBallOnNpcSide = isP2 ? ball.x >= WORLD.NET_X : ball.x <= WORLD.NET_X;
@@ -81,15 +82,48 @@ export function computeNpcInput(
     ? ball.x >= WORLD.NET_X - 40 && ball.vx > 40
     : ball.x <= WORLD.NET_X + 40 && ball.vx < -40;
 
-  if (
+  const behindBall = (npc.x - ball.x) * outwardSign;
+  const alignedForSpike = behindBall >= 0 && behindBall <= 45;
+  const distToNet = Math.abs(ball.x - WORLD.NET_X);
+  const canClearNetWithSmash =
+    distToNet < 140 && ball.y < WORLD.NET_TOP_Y - 55 - distToNet * 0.45;
+  const spikeAimMoveX = canClearNetWithSmash ? opponentDir : outwardSign;
+
+  const inJumpWindow =
     (isBallOnNpcSide || isApproachingCloseToNet) &&
-    Math.abs(ball.x - npc.x) < 95 &&
+    Math.abs(ball.x - npc.x) < 55 &&
     ball.y >= WORLD.FLOOR_Y - 260 &&
     ball.y <= WORLD.FLOOR_Y - 120 &&
-    ball.vy > -120
-  ) {
+    ball.vy > -120;
+
+  const nearAirborneContact =
+    !npc.isGrounded &&
+    (isBallOnNpcSide || isApproachingCloseToNet) &&
+    Math.abs(ball.y - npc.y) <= 95 &&
+    Math.abs(ball.x - npc.x) <= 60;
+
+  if (nearAirborneContact) {
     return {
-      moveX: opponentDir,
+      moveX: spikeAimMoveX,
+      targetX: null,
+      jump: inJumpWindow,
+    };
+  }
+
+  if (inJumpWindow) {
+    if (npc.isGrounded && alignedForSpike && canClearNetWithSmash) {
+      return {
+        moveX: opponentDir,
+        targetX: null,
+        jump: true,
+      };
+    }
+
+    const interceptX = clamp(ball.x + ball.vx * 0.08 + outwardOffset, minX, maxX);
+    const dx = interceptX - npc.x;
+    const moveX = Math.abs(dx) <= 6 ? 0 : clamp(dx / 35, -1, 1);
+    return {
+      moveX,
       targetX: null,
       jump: true,
     };

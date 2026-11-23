@@ -18,11 +18,12 @@ describe('rules state machine', () => {
 
     // Step 41 frames (~0.683s): still READY_SERVE, ball hovers, P1 can move
     for (let i = 0; i < 41; i++) {
-      stepGame(
+      const readyEvents = stepGame(
         state,
         [{ moveX: 1, targetX: null, jump: false }, IDLE_INPUT],
         WORLD.FIXED_DT,
       );
+      expect(readyEvents.wallHit).toBe(false);
     }
 
     expect(state.phase).toBe('READY_SERVE');
@@ -52,6 +53,9 @@ describe('rules state machine', () => {
     state.ball.x = WORLD.NET_X + 180;
     state.ball.y = WORLD.FLOOR_Y - WORLD.BALL_RADIUS + 2;
     state.ball.vy = 200;
+    state.players[0].y = WORLD.FLOOR_Y - WORLD.PLAYER_RADIUS - 80;
+    state.players[0].vy = -50;
+    state.players[0].isGrounded = false;
 
     const events = stepGame(state, [IDLE_INPUT, IDLE_INPUT], WORLD.FIXED_DT);
 
@@ -65,8 +69,17 @@ describe('rules state machine', () => {
     expect(state.players[0].animState).toBe('win');
     expect(state.players[1].animState).toBe('hurt');
 
-    // Step through 1.1s celebration -> resets round with P1 serving
-    for (let i = 0; i < 66; i++) {
+    // Step through 1.1s celebration -> airborne P1 settles to floor while keeping win pose
+    for (let i = 0; i < 30; i++) {
+      stepGame(state, [IDLE_INPUT, IDLE_INPUT], WORLD.FIXED_DT);
+    }
+    expect(state.phase).toBe('POINT_SCORED');
+    expect(state.players[0].isGrounded).toBe(true);
+    expect(state.players[0].y).toBe(WORLD.FLOOR_Y - WORLD.PLAYER_RADIUS);
+    expect(state.players[0].animState).toBe('win');
+    expect(state.players[1].animState).toBe('hurt');
+
+    for (let i = 0; i < 36; i++) {
       stepGame(state, [IDLE_INPUT, IDLE_INPUT], WORLD.FIXED_DT);
     }
 
@@ -128,11 +141,19 @@ describe('rules state machine', () => {
     expect(state.players[1].animState).toBe('lose');
 
     const prevAnimTime = state.players[0].animTime;
-    stepGame(state, [IDLE_INPUT, IDLE_INPUT], 0.1);
+    const overEvents = stepGame(state, [IDLE_INPUT, IDLE_INPUT], 0.1);
     expect(state.phase).toBe('MATCH_OVER');
     expect(state.players[0].animTime).toBeCloseTo(prevAnimTime + 0.1, 5);
     expect(state.players[0].animState).toBe('win');
     expect(state.players[1].animState).toBe('lose');
+    expect(overEvents).toEqual({
+      spikedBy: null,
+      slidBy: null,
+      volleyBy: null,
+      netHit: false,
+      wallHit: false,
+      ballHitFloorSide: null,
+    });
   });
 
   it('gates motion mode via WAITING_DISTANCE, freezing physics when motionReady=false and resuming when true', () => {

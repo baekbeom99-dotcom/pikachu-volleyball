@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { WORLD } from '../src/core/constants';
 import { createInitialBall, createInitialPlayer } from '../src/core/physics';
 import { computeNpcInput, predictBallLandingX } from '../src/core/npc';
-import { createGameState } from '../src/core/rules';
+import { createGameState, resetRound, stepGame } from '../src/core/rules';
+import type { PlayerInput } from '../src/core/types';
+
+const IDLE_INPUT: PlayerInput = { moveX: 0, targetX: null, jump: false };
 
 describe('npc AI and ball prediction', () => {
   it('predictBallLandingX predicts direct and wall-bounced landing positions accurately', () => {
@@ -74,15 +77,15 @@ describe('npc AI and ball prediction', () => {
     expect(settledInput.moveX).toBe(0);
   });
 
-  it('triggers jump and aims toward opponent when ball is in spike strike window', () => {
+  it('triggers jump and aims toward opponent when ball is in high near-net strike window', () => {
     const state = createGameState({
       controlMode: 'touch',
       opponentMode: 'npc',
     });
     state.phase = 'PLAYING';
-    state.players[1].x = 620;
-    state.ball.x = 600;
-    state.ball.y = WORLD.FLOOR_Y - 190;
+    state.players[1].x = 515;
+    state.ball.x = 500;
+    state.ball.y = WORLD.FLOOR_Y - 258; // high near net -> steep smash clears net
     state.ball.vx = -40;
     state.ball.vy = 80;
 
@@ -92,8 +95,8 @@ describe('npc AI and ball prediction', () => {
     expect(input.targetX).toBeNull();
 
     // Also verifies p1 symmetry when computeNpcInput is called with npcId='p1'
-    state.players[0].x = 220;
-    state.ball.x = 240;
+    state.players[0].x = 349;
+    state.ball.x = 364;
     const p1Input = computeNpcInput(state, 'p1');
     expect(p1Input.jump).toBe(true);
     expect(p1Input.moveX).toBe(1);
@@ -111,5 +114,77 @@ describe('npc AI and ball prediction', () => {
 
     const input = computeNpcInput(state, 'p2');
     expect(input).toEqual({ moveX: 0, targetX: null, jump: false });
+  });
+
+  it('hits and returns its own serve over the net in multi-frame simulation', () => {
+    const state = createGameState({
+      controlMode: 'touch',
+      opponentMode: 'npc',
+    });
+    resetRound(state, 'p2');
+
+    let p2HitBall = false;
+    let crossedNetToLeft = false;
+
+    for (let i = 0; i < 180; i++) {
+      const p2Input = computeNpcInput(state, 'p2');
+      const events = stepGame(state, [IDLE_INPUT, p2Input], WORLD.FIXED_DT);
+      if (events.spikedBy === 'p2' || events.volleyBy === 'p2') {
+        p2HitBall = true;
+      }
+      if (p2HitBall && state.ball.x < WORLD.NET_X) {
+        crossedNetToLeft = true;
+        break;
+      }
+      expect(state.scores.p1).toBe(0);
+    }
+
+    expect(p2HitBall).toBe(true);
+    expect(crossedNetToLeft).toBe(true);
+  });
+
+  it('returns incoming mid-court and fast rightward shots without gifting a floor point', () => {
+    const scenarios = [
+      {
+        name: 'mid-court arc',
+        x: WORLD.NET_X + 20,
+        y: 220,
+        vx: 160,
+        vy: -240,
+      },
+      {
+        name: 'fast rightward shot',
+        x: WORLD.NET_X + 10,
+        y: 250,
+        vx: 360,
+        vy: -180,
+      },
+    ];
+
+    for (const shot of scenarios) {
+      const state = createGameState({
+        controlMode: 'touch',
+        opponentMode: 'npc',
+      });
+      state.phase = 'PLAYING';
+      state.phaseTimer = 0;
+      state.ball.x = shot.x;
+      state.ball.y = shot.y;
+      state.ball.vx = shot.vx;
+      state.ball.vy = shot.vy;
+
+      let p2Returned = false;
+      for (let i = 0; i < 180; i++) {
+        const p2Input = computeNpcInput(state, 'p2');
+        const events = stepGame(state, [IDLE_INPUT, p2Input], WORLD.FIXED_DT);
+        if (events.spikedBy === 'p2' || events.volleyBy === 'p2') {
+          p2Returned = true;
+          break;
+        }
+        expect(state.scores.p1).toBe(0);
+      }
+
+      expect(p2Returned, shot.name).toBe(true);
+    }
   });
 });

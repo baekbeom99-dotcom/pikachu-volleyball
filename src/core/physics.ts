@@ -236,17 +236,17 @@ function recordBallTrail(ball: BallState): void {
 function collideBallWalls(ball: BallState, events: PhysicsEvents): void {
   if (ball.y - ball.radius < 0) {
     ball.y = ball.radius;
-    ball.vy = Math.abs(ball.vy) * 0.85;
+    ball.vy = Math.abs(ball.vy) * WORLD.BALL_WALL_RESTITUTION;
     events.wallHit = true;
   }
 
   if (ball.x - ball.radius < 0) {
     ball.x = ball.radius;
-    ball.vx = Math.abs(ball.vx) * 0.85;
+    ball.vx = Math.abs(ball.vx) * WORLD.BALL_WALL_RESTITUTION;
     events.wallHit = true;
   } else if (ball.x + ball.radius > WORLD.WIDTH) {
     ball.x = WORLD.WIDTH - ball.radius;
-    ball.vx = -Math.abs(ball.vx) * 0.85;
+    ball.vx = -Math.abs(ball.vx) * WORLD.BALL_WALL_RESTITUTION;
     events.wallHit = true;
   }
 }

@@ -113,6 +113,7 @@ export function stepGame(
     const safeDt = Math.max(0, dt);
     state.players[0].animTime += safeDt;
     state.players[1].animTime += safeDt;
+    state.lastEvents = createEmptyEvents();
     return state.lastEvents;
   }
 
@@ -145,7 +146,8 @@ export function stepGame(
     // Allow players to position and jump while holding the serve ball motionless.
     const phantomBall = createInitialBall(state.serveSide);
     phantomBall.y = -1000;
-    state.lastEvents = stepPhysics(state.players, phantomBall, inputs, dt);
+    stepPhysics(state.players, phantomBall, inputs, dt);
+    state.lastEvents = createEmptyEvents();
 
     state.phaseTimer -= dt;
     if (state.phaseTimer <= TIMER_EPSILON) {
