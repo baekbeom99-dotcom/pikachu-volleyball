@@ -93,17 +93,42 @@ describe('motionMath', () => {
     expect(twoVisible.detected).toBe(false);
     expect(twoVisible.gateStatus).toBe('NO_PERSON');
 
-    // 3 visible landmarks, but none are torso (11, 12, 23, 24)
-    const noTorso: NormalizedLandmark[] = [];
-    noTorso[0] = { x: 0.5, y: 0.2, visibility: 0.9 };
-    noTorso[15] = { x: 0.4, y: 0.5, visibility: 0.9 };
-    noTorso[16] = { x: 0.6, y: 0.5, visibility: 0.9 };
-    const noTorsoRes = evaluateSidePose('left', noTorso, tracker, 1 / 60);
-    expect(noTorsoRes.detected).toBe(false);
-    expect(noTorsoRes.gateStatus).toBe('NO_PERSON');
+    // 3 visible landmarks, but none are face (0..10) or torso (11, 12, 23, 24)
+    const noAnchor: NormalizedLandmark[] = [];
+    noAnchor[15] = { x: 0.4, y: 0.5, visibility: 0.9 };
+    noAnchor[16] = { x: 0.6, y: 0.5, visibility: 0.9 };
+    noAnchor[27] = { x: 0.5, y: 0.9, visibility: 0.9 };
+    const noAnchorRes = evaluateSidePose('left', noAnchor, tracker, 1 / 60);
+    expect(noAnchorRes.detected).toBe(false);
+    expect(noAnchorRes.gateStatus).toBe('NO_PERSON');
   });
 
-  it('maps left and right ROI torso center X onto P1 and P2 court bounds and clamps extremes', () => {
+  it('tracks face X position independently of torso X and maps onto court bounds', () => {
+    const leftMin = WORLD.PLAYER_RADIUS + 8;
+    const leftMax = WORLD.NET_LEFT - WORLD.PLAYER_RADIUS - 8;
+    const rightMin = WORLD.NET_RIGHT + WORLD.PLAYER_RADIUS + 8;
+    const rightMax = WORLD.WIDTH - WORLD.PLAYER_RADIUS - 8;
+
+    const faceTracker = createSideTrackerState();
+    const tiltedPose = makePose({ centerX: 0.3 }); // Torso at 0.30
+    tiltedPose[0] = { x: 0.72, y: 0.25, visibility: 0.95 }; // Nose at 0.72
+    tiltedPose[1] = { x: 0.72, y: 0.2, visibility: 0.95 }; // Eye at 0.72
+    const faceResult = evaluateSidePose('left', tiltedPose, faceTracker, 1 / 60);
+    expect(faceResult.detected).toBe(true);
+    expect(faceResult.targetX).toBeCloseTo(leftMin + 0.72 * (leftMax - leftMin), 5);
+
+    // Face-only detection still works when torso landmarks are cropped/invisible
+    const faceOnlyTracker = createSideTrackerState();
+    const faceOnlyPose: NormalizedLandmark[] = [];
+    faceOnlyPose[0] = { x: 0.6, y: 0.3, visibility: 0.95 };
+    faceOnlyPose[2] = { x: 0.58, y: 0.26, visibility: 0.95 };
+    faceOnlyPose[5] = { x: 0.62, y: 0.26, visibility: 0.95 };
+    const faceOnlyRes = evaluateSidePose('right', faceOnlyPose, faceOnlyTracker, 1 / 60);
+    expect(faceOnlyRes.detected).toBe(true);
+    expect(faceOnlyRes.targetX).toBeCloseTo(rightMin + 0.6 * (rightMax - rightMin), 5);
+  });
+
+  it('maps left and right ROI X onto P1 and P2 court bounds and clamps extremes', () => {
     const leftMin = WORLD.PLAYER_RADIUS + 8;
     const leftMax = WORLD.NET_LEFT - WORLD.PLAYER_RADIUS - 8;
     const rightMin = WORLD.NET_RIGHT + WORLD.PLAYER_RADIUS + 8;
@@ -457,14 +482,14 @@ describe('motionMath', () => {
     expect(Number.isFinite(nanDtRes.heightRatio)).toBe(true);
     expect(tracker.okHoldSeconds).toBe(0);
 
-    // If all torso landmarks become NaN, tracker safely reports NO_PERSON without poisoning state
-    const badTorsoPose = makePose({ centerX: 0.5 });
-    for (const idx of [11, 12, 23, 24]) {
-      badTorsoPose[idx] = { x: Number.NaN, y: Number.POSITIVE_INFINITY, visibility: 0.95 };
+    // If all face and torso landmarks become NaN, tracker safely reports NO_PERSON without poisoning state
+    const badAnchorPose = makePose({ centerX: 0.5 });
+    for (const idx of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 23, 24]) {
+      badAnchorPose[idx] = { x: Number.NaN, y: Number.POSITIVE_INFINITY, visibility: 0.95 };
     }
-    const badTorsoRes = evaluateSidePose('left', badTorsoPose, tracker, -0.5);
-    expect(badTorsoRes.detected).toBe(false);
-    expect(badTorsoRes.gateStatus).toBe('NO_PERSON');
+    const badAnchorRes = evaluateSidePose('left', badAnchorPose, tracker, -0.5);
+    expect(badAnchorRes.detected).toBe(false);
+    expect(badAnchorRes.gateStatus).toBe('NO_PERSON');
     expect(tracker.smoothedCenterX).toBeNull();
   });
 });

@@ -46,6 +46,7 @@ const COURT_EDGE_PADDING = 8;
 const HOLD_EPSILON = 1e-9;
 
 const NOSE = 0;
+const FACE_INDICES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 const LEFT_SHOULDER = 11;
 const RIGHT_SHOULDER = 12;
 const LEFT_WRIST = 15;
@@ -243,8 +244,9 @@ export function evaluateSidePose(
     if (lm.y > rawMaxY) rawMaxY = lm.y;
   }
 
+  const visibleFace = getVisibleByIndices(landmarks, FACE_INDICES);
   const visibleTorso = getVisibleByIndices(landmarks, TORSO_INDICES);
-  if (visibleCount < 3 || visibleTorso.length === 0) {
+  if (visibleCount < 3 || (visibleFace.length === 0 && visibleTorso.length === 0)) {
     return resetNoPerson(tracker);
   }
 
@@ -255,7 +257,7 @@ export function evaluateSidePose(
   const widthRatio = maxX - minX;
   const heightRatio = maxY - minY;
 
-  const rawCenterX = averageField(visibleTorso, 'x')!;
+  const rawCenterX = averageField(visibleFace.length > 0 ? visibleFace : visibleTorso, 'x')!;
   const isEdgeOnlyIntrusion =
     side === 'left' ? minX > 1 - DIVIDER_MARGIN : maxX < DIVIDER_MARGIN;
   const inDividerMargin =
