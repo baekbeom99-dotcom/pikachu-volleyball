@@ -1,0 +1,51 @@
+{
+  "character_id": "033",
+  "rig_version": "modular_v2_specialized",
+  "actions": {
+    "idle": {
+      "frames": 4,
+      "fps": 7,
+      "sheet": "idle_sheet.png"
+    },
+    "walk": {
+      "frames": 8,
+      "fps": 11,
+      "sheet": "walk_sheet.png"
+    },
+    "run": {
+      "frames": 8,
+      "fps": 12,
+      "sheet": "run_sheet.png"
+    },
+    "attack": {
+      "frames": 6,
+      "fps": 10,
+      "sheet": "attack_sheet.png"
+    },
+    "hurt": {
+      "frames": 5,
+      "fps": 10,
+      "sheet": "hurt_sheet.png"
+    },
+    "jump_launch": {
+      "frames": 4,
+      "fps": 12,
+      "sheet": "jump_launch_sheet.png"
+    },
+    "air_float": {
+      "frames": 4,
+      "fps": 10,
+      "sheet": "air_float_sheet.png"
+    },
+    "spike": {
+      "frames": 5,
+      "fps": 12,
+      "sheet": "spike_sheet.png"
+    },
+    "slide": {
+      "frames": 5,
+      "fps": 10,
+      "sheet": "slide_sheet.png"
+    }
+  }
+}
