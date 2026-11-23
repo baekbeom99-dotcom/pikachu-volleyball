@@ -363,6 +363,7 @@ export class MotionInputProvider implements InputProvider {
       const inactiveSide: Side = this.activeSide === 'left' ? 'right' : 'left';
       if (inactiveSide === 'left') {
         this.leftTracker = createSideTrackerState();
+        this.cachedInputs[0] = idleInput();
         this.cachedStatuses[0] = createInitialSideStatus('left');
       } else {
         this.rightTracker = createSideTrackerState();
@@ -588,11 +589,12 @@ export class MotionInputProvider implements InputProvider {
   }
 
   /** Returns a plain DTO summary for Pop-Art HUD rendering without exposing input classes. */
-  getOverlayData(): MotionOverlayData {
+  getOverlayData(): MotionOverlayData & { activeSide: Side } {
     return {
       statuses: this.getSideStatuses(),
       isReady: this.isMotionReady(),
       error: this.getError(),
+      activeSide: this.activeSide,
     };
   }
 

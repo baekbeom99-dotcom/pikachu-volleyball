@@ -193,8 +193,40 @@ describe('MotionInputProvider', () => {
 
     const overlay = provider.getOverlayData();
     expect(overlay.isReady).toBe(true);
+    expect(overlay.activeSide).toBe('right');
     expect(overlay.statuses[0].gateStatus).toBe('NO_PERSON');
     expect(overlay.statuses[1].gateStatus).toBe('OK');
+
+    provider.dispose();
+  });
+
+  it('clears inactive left cachedInputs slot when activeSide is right and switching from 2p to npc', async () => {
+    const { stream } = createFakeStream();
+    setGetUserMedia(vi.fn().mockResolvedValue(stream));
+
+    const rightLandmarker = createFakeLandmarker(makeOkPose(0.5));
+    const leftLandmarker = createFakeLandmarker(makeOkPose(0.8));
+    createFromOptionsMock
+      .mockResolvedValueOnce(rightLandmarker)
+      .mockResolvedValueOnce(leftLandmarker);
+
+    const videoEl = createMockVideo(640, 480);
+    const provider = new MotionInputProvider({
+      videoEl,
+      opponentMode: '2p',
+      activeSide: 'right',
+    });
+    await provider.init();
+
+    videoEl.currentTime = 0.25;
+    const [p1In2p] = provider.getInputs(0.25);
+    expect(p1In2p.targetX).not.toBeNull();
+
+    // Switching to npc without advancing videoEl.currentTime must not leak old left-side input
+    provider.setOpponentMode('npc');
+    const [p1AfterSwitch, p2AfterSwitch] = provider.getInputs(0.016);
+    expect(p1AfterSwitch).toEqual({ moveX: 0, targetX: null, jump: false });
+    expect(p2AfterSwitch).toEqual({ moveX: 0, targetX: null, jump: false });
 
     provider.dispose();
   });
