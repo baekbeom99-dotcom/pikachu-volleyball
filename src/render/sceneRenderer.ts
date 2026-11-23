@@ -193,7 +193,12 @@ export class PopArtSceneRenderer {
     ctx.lineTo(midX, frameY + frameH - 4);
     ctx.stroke();
 
-    const splitLabel = state.opponentMode === '2p' ? '1P  |  2P' : 'HUMAN  |  NPC';
+    const splitLabel =
+      state.opponentMode === '2p'
+        ? '1P  |  2P'
+        : overlay.motionOverlay?.activeSide === 'right'
+          ? 'NPC  |  HUMAN'
+          : 'HUMAN  |  NPC';
     drawPopPanel(ctx, midX - 58, frameY - 12, 116, 24, POP_PALETTE.YELLOW, 3, 3);
     drawPopText(ctx, splitLabel, midX, frameY, {
       font: '900 13px Impact, "Arial Black", sans-serif',

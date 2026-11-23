@@ -184,4 +184,34 @@ describe('MenuUI', () => {
 
     ui.dispose();
   });
+
+  it('preserves keyboard focus across MenuUI option and HUD toggles', () => {
+    const callbacks = createCallbacks();
+    const ui = new MenuUI(container, callbacks);
+
+    const selectors = [
+      '[data-control="motion"]',
+      '[data-opponent="2p"]',
+      '[data-score="10"]',
+      '[data-model="placeholder"]',
+    ];
+    for (const selector of selectors) {
+      const btn = container.querySelector<HTMLButtonElement>(selector)!;
+      btn.focus();
+      expect(document.activeElement).toBe(btn);
+      btn.click();
+      const rerendered = container.querySelector<HTMLButtonElement>(selector)!;
+      expect(rerendered).not.toBe(btn);
+      expect(document.activeElement).toBe(rerendered);
+    }
+
+    ui.setScreen('IN_GAME');
+    const muteBtn = container.querySelector<HTMLButtonElement>('[data-action="toggle-mute"]')!;
+    muteBtn.focus();
+    muteBtn.click();
+    const rerenderedMute = container.querySelector<HTMLButtonElement>('[data-action="toggle-mute"]')!;
+    expect(document.activeElement).toBe(rerenderedMute);
+
+    ui.dispose();
+  });
 });

@@ -266,6 +266,56 @@ describe('PopArtSceneRenderer', () => {
     expect(playingTexts).not.toContain('STEP BACK!');
     expect(playingTexts).not.toContain('STEP IN!');
   });
+
+  it('renders NPC | HUMAN when opponentMode is npc and activeSide is right', () => {
+    const renderer = new PopArtSceneRenderer({ preloadSprites: false });
+    const state = createGameState({
+      controlMode: 'motion',
+      opponentMode: 'npc',
+      initialPhase: 'WAITING_DISTANCE',
+    });
+
+    const leftCtx = createMockCanvas2D();
+    renderer.render(leftCtx, state, {
+      joysticks: [],
+      canvasCssWidth: WORLD.WIDTH,
+      canvasCssHeight: WORLD.HEIGHT,
+      motionOverlay: {
+        statuses: [
+          { side: 'left', detected: true, widthRatio: 0.35, heightRatio: 0.55, gateStatus: 'OK' },
+          { side: 'right', detected: false, widthRatio: 0, heightRatio: 0, gateStatus: 'NO_PERSON' },
+        ],
+        isReady: true,
+        error: null,
+        activeSide: 'left',
+      },
+      motionPreviewCanvas: null,
+      showPlaceholders: true,
+    });
+    const leftTexts = (leftCtx.fillText as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    expect(leftTexts).toContain('HUMAN  |  NPC');
+
+    const rightCtx = createMockCanvas2D();
+    renderer.render(rightCtx, state, {
+      joysticks: [],
+      canvasCssWidth: WORLD.WIDTH,
+      canvasCssHeight: WORLD.HEIGHT,
+      motionOverlay: {
+        statuses: [
+          { side: 'left', detected: false, widthRatio: 0, heightRatio: 0, gateStatus: 'NO_PERSON' },
+          { side: 'right', detected: true, widthRatio: 0.35, heightRatio: 0.55, gateStatus: 'OK' },
+        ],
+        isReady: true,
+        error: null,
+        activeSide: 'right',
+      },
+      motionPreviewCanvas: null,
+      showPlaceholders: true,
+    });
+    const rightTexts = (rightCtx.fillText as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    expect(rightTexts).toContain('NPC  |  HUMAN');
+    expect(rightTexts).not.toContain('HUMAN  |  NPC');
+  });
 });
 
 describe('PopArtAudio', () => {

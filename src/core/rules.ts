@@ -1,6 +1,7 @@
 import { WORLD } from './constants';
 import { createInitialBall, createInitialPlayer, stepPhysics } from './physics';
 import type {
+  CharacterAnimState,
   ControlMode,
   GameState,
   OpponentMode,
@@ -36,6 +37,13 @@ function getPlayerById(players: [PlayerState, PlayerState], id: PlayerId): Playe
   return id === 'p1' ? players[0] : players[1];
 }
 
+function setPlayerAnimState(player: PlayerState, targetState: CharacterAnimState): void {
+  if (player.animState !== targetState) {
+    player.animTime = 0;
+  }
+  player.animState = targetState;
+}
+
 function applyMatchOverPoses(state: GameState): void {
   if (state.winner === null) {
     return;
@@ -43,10 +51,10 @@ function applyMatchOverPoses(state: GameState): void {
   const loser: PlayerId = state.winner === 'p1' ? 'p2' : 'p1';
   const winnerPlayer = getPlayerById(state.players, state.winner);
   const loserPlayer = getPlayerById(state.players, loser);
-  winnerPlayer.animState = 'win';
+  setPlayerAnimState(winnerPlayer, 'win');
   winnerPlayer.animLock = null;
   winnerPlayer.animLockTimer = 0;
-  loserPlayer.animState = 'lose';
+  setPlayerAnimState(loserPlayer, 'lose');
   loserPlayer.animLock = null;
   loserPlayer.animLockTimer = 0;
 }
@@ -180,10 +188,10 @@ export function stepGame(
 
       const scorerPlayer = getPlayerById(state.players, scorer);
       const loserPlayer = getPlayerById(state.players, loser);
-      scorerPlayer.animState = 'win';
+      setPlayerAnimState(scorerPlayer, 'win');
       scorerPlayer.animLock = 'win';
       scorerPlayer.animLockTimer = POINT_SCORED_DURATION;
-      loserPlayer.animState = 'hurt';
+      setPlayerAnimState(loserPlayer, 'hurt');
       loserPlayer.animLock = 'hurt';
       loserPlayer.animLockTimer = POINT_SCORED_DURATION;
     }
@@ -200,8 +208,8 @@ export function stepGame(
 
     settlePlayerInCelebration(scorerPlayer, dt);
     settlePlayerInCelebration(loserPlayer, dt);
-    scorerPlayer.animState = 'win';
-    loserPlayer.animState = 'hurt';
+    setPlayerAnimState(scorerPlayer, 'win');
+    setPlayerAnimState(loserPlayer, 'hurt');
 
     state.phaseTimer -= dt;
     if (state.phaseTimer <= TIMER_EPSILON) {

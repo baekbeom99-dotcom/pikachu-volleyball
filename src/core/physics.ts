@@ -138,6 +138,7 @@ function tryTriggerAutoSlide(
     player.vx = dir * WORLD.SLIDE_SPEED;
     player.animLock = 'slide';
     player.animLockTimer = WORLD.SLIDE_DURATION;
+    player.animTime = 0;
     events.slidBy = player.id;
   }
 }
@@ -166,6 +167,7 @@ function stepPlayer(
   dt: number,
   events: PhysicsEvents,
 ): void {
+  const prevAnimState = player.animState;
   updatePlayerTimers(player, dt);
 
   const { minX, maxX } = getCourtBounds(player.id);
@@ -206,7 +208,11 @@ function stepPlayer(
     player.isGrounded = false;
   }
 
-  player.animState = computeAnimState(player);
+  const nextAnimState = computeAnimState(player);
+  if (nextAnimState !== prevAnimState) {
+    player.animTime = 0;
+  }
+  player.animState = nextAnimState;
 }
 
 function stepBall(ball: BallState, dt: number): void {
@@ -357,6 +363,7 @@ function collideBallPlayer(
     player.animLock = 'spike';
     player.animLockTimer = 0.32;
     player.animState = 'spike';
+    player.animTime = 0;
     events.spikedBy = player.id;
     return;
   }
@@ -371,6 +378,7 @@ function collideBallPlayer(
     player.animLock = 'attack';
     player.animLockTimer = 0.22;
     player.animState = 'attack';
+    player.animTime = 0;
   }
 
   ball.isSpiked = false;

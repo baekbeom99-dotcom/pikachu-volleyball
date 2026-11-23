@@ -172,6 +172,10 @@ describe('MotionInputProvider', () => {
     });
     await provider.init();
 
+    // MediaPipe WASM base URL must match installed @mediapipe/tasks-vision version (0.10.35)
+    expect(forVisionTasksMock).toHaveBeenCalledWith(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm',
+    );
     // Only one landmarker should be created for npc mode
     expect(createFromOptionsMock).toHaveBeenCalledTimes(1);
 

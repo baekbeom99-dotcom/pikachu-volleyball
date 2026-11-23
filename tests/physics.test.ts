@@ -486,4 +486,105 @@ describe('stepPhysics', () => {
     expect(ball.trail).toHaveLength(1);
     expect(ball.trail[0]).toEqual({ x: ball.x, y: ball.y, isSpiked: true });
   });
+
+  it('resets animTime to 0 on jump_launch, slide, spike, and attack transitions after > 1.0s', () => {
+    const idle = { moveX: 0, targetX: null, jump: false };
+
+    // 1. jump_launch transition resets animTime even after > 1.0s idle
+    const jumpP1 = createInitialPlayer('p1');
+    const jumpP2 = createInitialPlayer('p2');
+    const jumpBall = createInitialBall('p1');
+    jumpBall.y = 50;
+    jumpP1.animTime = 1.4;
+    stepPhysics(
+      [jumpP1, jumpP2],
+      jumpBall,
+      [{ moveX: 0, targetX: null, jump: true }, idle],
+      WORLD.FIXED_DT,
+    );
+    expect(jumpP1.animState).toBe('jump_launch');
+    expect(jumpP1.animTime).toBe(0);
+
+    // Subsequent frame in jump_launch advances animTime smoothly
+    stepPhysics([jumpP1, jumpP2], jumpBall, [idle, idle], WORLD.FIXED_DT);
+    expect(jumpP1.animState).toBe('jump_launch');
+    expect(jumpP1.animTime).toBeCloseTo(WORLD.FIXED_DT, 6);
+
+    // 2. slide transition resets animTime even after > 1.0s
+    const slideP1 = createInitialPlayer('p1');
+    const slideP2 = createInitialPlayer('p2');
+    slideP1.x = 120;
+    slideP1.animTime = 1.8;
+    const slideBall = createInitialBall('p1');
+    slideBall.x = 220;
+    slideBall.y = WORLD.FLOOR_Y - 110;
+    slideBall.vy = 260;
+    const slideEvents = stepPhysics(
+      [slideP1, slideP2],
+      slideBall,
+      [{ moveX: 1, targetX: null, jump: false }, idle],
+      WORLD.FIXED_DT,
+    );
+    expect(slideEvents.slidBy).toBe('p1');
+    expect(slideP1.animState).toBe('slide');
+    expect(slideP1.animTime).toBe(0);
+
+    // 3. spike transition (and repeated spike) resets animTime to 0
+    const spikeP1 = createInitialPlayer('p1');
+    const spikeP2 = createInitialPlayer('p2');
+    spikeP1.x = 220;
+    spikeP1.y = 320;
+    spikeP1.isGrounded = false;
+    spikeP1.animState = 'air_float';
+    spikeP1.animTime = 1.6;
+    const spikeBall = createInitialBall('p1');
+    spikeBall.x = 250;
+    spikeBall.y = 290;
+    spikeBall.vy = 100;
+    const spikeEv1 = stepPhysics(
+      [spikeP1, spikeP2],
+      spikeBall,
+      [{ moveX: 1, targetX: null, jump: false }, idle],
+      WORLD.FIXED_DT,
+    );
+    expect(spikeEv1.spikedBy).toBe('p1');
+    expect(spikeP1.animState).toBe('spike');
+    expect(spikeP1.animTime).toBe(0);
+
+    // Repeated spike while still in spike state also restarts at animTime = 0
+    spikeP1.animTime = 0.15;
+    spikeBall.x = spikeP1.x + 25;
+    spikeBall.y = spikeP1.y - 20;
+    const spikeEv2 = stepPhysics(
+      [spikeP1, spikeP2],
+      spikeBall,
+      [{ moveX: 1, targetX: null, jump: false }, idle],
+      WORLD.FIXED_DT,
+    );
+    expect(spikeEv2.spikedBy).toBe('p1');
+    expect(spikeP1.animState).toBe('spike');
+    expect(spikeP1.animTime).toBe(0);
+
+    // 4. attack transition (and repeated attack) resets animTime to 0
+    const atkP1 = createInitialPlayer('p1');
+    const atkP2 = createInitialPlayer('p2');
+    atkP1.animTime = 1.9;
+    const atkBall = createInitialBall('p1');
+    atkBall.x = atkP1.x + 10;
+    atkBall.y = atkP1.y - WORLD.PLAYER_RADIUS - WORLD.BALL_RADIUS + 8;
+    atkBall.vy = 220;
+    const atkEv1 = stepPhysics([atkP1, atkP2], atkBall, [idle, idle], WORLD.FIXED_DT);
+    expect(atkEv1.volleyBy).toBe('p1');
+    expect(atkP1.animState).toBe('attack');
+    expect(atkP1.animTime).toBe(0);
+
+    atkP1.animTime = 0.12;
+    atkBall.x = atkP1.x + 10;
+    atkBall.y = atkP1.y - WORLD.PLAYER_RADIUS - WORLD.BALL_RADIUS + 8;
+    atkBall.vy = 220;
+    const atkEv2 = stepPhysics([atkP1, atkP2], atkBall, [idle, idle], WORLD.FIXED_DT);
+    expect(atkEv2.volleyBy).toBe('p1');
+    expect(atkP1.animState).toBe('attack');
+    expect(atkP1.animTime).toBe(0);
+  });
 });

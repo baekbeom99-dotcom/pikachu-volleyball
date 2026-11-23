@@ -26,6 +26,14 @@ export interface MenuCallbacks {
   onRetryMotion: () => void;
 }
 
+const FOCUS_ATTRS = [
+  'data-action',
+  'data-control',
+  'data-opponent',
+  'data-score',
+  'data-model',
+] as const;
+
 function stopPointerPropagation(el: HTMLElement): void {
   el.addEventListener('pointerdown', (event) => {
     event.stopPropagation();
@@ -191,6 +199,18 @@ export class MenuUI {
   }
 
   private render(): void {
+    const activeEl = typeof document !== 'undefined' ? document.activeElement : null;
+    let focusAttr: { name: string; value: string } | null = null;
+    if (activeEl instanceof HTMLElement && this.container.contains(activeEl)) {
+      for (const attr of FOCUS_ATTRS) {
+        const value = activeEl.getAttribute(attr);
+        if (value !== null) {
+          focusAttr = { name: attr, value };
+          break;
+        }
+      }
+    }
+
     this.container.replaceChildren();
 
     if (this.screen === 'MENU') {
@@ -204,6 +224,16 @@ export class MenuUI {
 
     if (this.cameraError !== null) {
       this.container.appendChild(this.buildCameraErrorModal(this.cameraError));
+    }
+
+    if (focusAttr !== null) {
+      const candidates = this.container.querySelectorAll<HTMLElement>(`[${focusAttr.name}]`);
+      for (const el of candidates) {
+        if (el.getAttribute(focusAttr.name) === focusAttr.value) {
+          el.focus();
+          break;
+        }
+      }
     }
   }
 

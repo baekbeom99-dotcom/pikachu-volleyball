@@ -15,7 +15,7 @@ import {
 import { idleInput, type InputProvider } from './types';
 
 const WASM_BASE_URL =
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm';
+  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm';
 const POSE_MODEL_URL =
   'https://storage.googleapis.com/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 

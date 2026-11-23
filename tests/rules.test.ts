@@ -247,4 +247,43 @@ describe('rules state machine', () => {
     stepGame(menuState, [IDLE_INPUT, IDLE_INPUT], 0);
     expect(menuState.phaseTimer).toBe(beforeTimer);
   });
+
+  it('resets animTime to 0 on POINT_SCORED win/hurt transitions after > 1.0s and advances cleanly', () => {
+    const state = createGameState({
+      controlMode: 'touch',
+      opponentMode: 'npc',
+      targetScore: 5,
+    });
+    state.scores.p1 = 4;
+    state.phase = 'PLAYING';
+    state.phaseTimer = 0;
+    state.players[0].animTime = 2.4;
+    state.players[1].animTime = 3.1;
+    state.ball.x = WORLD.NET_X + 180;
+    state.ball.y = WORLD.FLOOR_Y - WORLD.BALL_RADIUS + 2;
+    state.ball.vy = 200;
+
+    stepGame(state, [IDLE_INPUT, IDLE_INPUT], WORLD.FIXED_DT);
+
+    expect(state.phase).toBe('POINT_SCORED');
+    expect(state.players[0].animState).toBe('win');
+    expect(state.players[0].animTime).toBe(0);
+    expect(state.players[1].animState).toBe('hurt');
+    expect(state.players[1].animTime).toBe(0);
+
+    // During POINT_SCORED, both win and hurt advance animTime without resetting
+    stepGame(state, [IDLE_INPUT, IDLE_INPUT], WORLD.FIXED_DT);
+    expect(state.players[0].animTime).toBeCloseTo(WORLD.FIXED_DT, 6);
+    expect(state.players[1].animTime).toBeCloseTo(WORLD.FIXED_DT, 6);
+
+    // Finish POINT_SCORED -> MATCH_OVER: winner keeps advancing 'win', loser resets 'hurt' -> 'lose' to 0
+    for (let i = 0; i < 65; i++) {
+      stepGame(state, [IDLE_INPUT, IDLE_INPUT], WORLD.FIXED_DT);
+    }
+    expect(state.phase).toBe('MATCH_OVER');
+    expect(state.players[0].animState).toBe('win');
+    expect(state.players[0].animTime).toBeGreaterThan(1.0);
+    expect(state.players[1].animState).toBe('lose');
+    expect(state.players[1].animTime).toBe(0);
+  });
 });
