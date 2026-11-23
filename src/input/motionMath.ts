@@ -31,6 +31,7 @@ export const MIN_VISIBILITY = 0.45;
 export const DIVIDER_MARGIN = 0.14;
 export const MAX_ANCHOR_JUMP = 0.35;
 export const EMA_ALPHA = 0.35;
+export const HEAD_MOVE_GAIN = 1.2;
 export const JUMP_RISE_THRESHOLD = 0.06;
 export const HAND_UP_OFFSET = 0.04;
 export const INTRUSION_RESET_SECONDS = 0.4;
@@ -89,11 +90,11 @@ function averageField(landmarks: NormalizedLandmark[], field: 'x' | 'y'): number
 }
 
 function mapNormalizedXToCourt(side: 'left' | 'right', normalizedX: number): number {
-  const clampedX = clamp01(normalizedX);
+  const weightedX = clamp01(0.5 + (clamp01(normalizedX) - 0.5) * HEAD_MOVE_GAIN);
   const margin = WORLD.PLAYER_RADIUS + COURT_EDGE_PADDING;
   const minX = side === 'left' ? margin : WORLD.NET_RIGHT + margin;
   const maxX = side === 'left' ? WORLD.NET_LEFT - margin : WORLD.WIDTH - margin;
-  return minX + clampedX * (maxX - minX);
+  return minX + weightedX * (maxX - minX);
 }
 
 function resetNoPerson(tracker: SideTrackerState): SidePoseEvaluation {

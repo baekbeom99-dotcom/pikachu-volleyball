@@ -113,7 +113,8 @@ describe('motionMath', () => {
     tiltedPose[1] = { x: 0.72, y: 0.2, visibility: 0.95 }; // Eye at 0.72
     const faceResult = evaluateSidePose('left', tiltedPose, faceTracker, 1 / 60);
     expect(faceResult.detected).toBe(true);
-    expect(faceResult.targetX).toBeCloseTo(leftMin + 0.72 * (leftMax - leftMin), 5);
+    // 0.72 with +20% head movement gain: 0.5 + (0.72 - 0.5) * 1.2 = 0.764
+    expect(faceResult.targetX).toBeCloseTo(leftMin + 0.764 * (leftMax - leftMin), 5);
 
     // Face-only detection still works when torso landmarks are cropped/invisible
     const faceOnlyTracker = createSideTrackerState();
@@ -123,7 +124,8 @@ describe('motionMath', () => {
     faceOnlyPose[5] = { x: 0.62, y: 0.26, visibility: 0.95 };
     const faceOnlyRes = evaluateSidePose('right', faceOnlyPose, faceOnlyTracker, 1 / 60);
     expect(faceOnlyRes.detected).toBe(true);
-    expect(faceOnlyRes.targetX).toBeCloseTo(rightMin + 0.6 * (rightMax - rightMin), 5);
+    // 0.60 with +20% head movement gain: 0.5 + (0.60 - 0.5) * 1.2 = 0.62
+    expect(faceOnlyRes.targetX).toBeCloseTo(rightMin + 0.62 * (rightMax - rightMin), 5);
   });
 
   it('maps left and right ROI X onto P1 and P2 court bounds and clamps extremes', () => {
@@ -175,7 +177,8 @@ describe('motionMath', () => {
   it('guards against divider intrusion while preserving existing anchor and rejects unanchored edge intrusion', () => {
     const rightMin = WORLD.NET_RIGHT + WORLD.PLAYER_RADIUS + 8;
     const rightMax = WORLD.WIDTH - WORLD.PLAYER_RADIUS - 8;
-    const expectedP2At065 = rightMin + 0.65 * (rightMax - rightMin);
+    // 0.65 with +20% head movement gain: 0.5 + (0.65 - 0.5) * 1.2 = 0.68
+    const expectedP2At065 = rightMin + 0.68 * (rightMax - rightMin);
 
     // Anchored P2 at x = 0.65
     const rightTracker = createSideTrackerState();
