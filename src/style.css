@@ -458,34 +458,48 @@ body {
 
 @media (max-height: 520px) {
   .pop-menu-card {
-    padding: 10px 14px;
+    padding: 8px 12px;
+    gap: 6px;
+  }
+
+  .pop-menu-header {
+    flex-direction: row;
+    justify-content: center;
+    padding-right: 40px;
     gap: 8px;
   }
 
   .pop-menu-title {
-    font-size: 1.55rem;
-    -webkit-text-stroke: 4px var(--pop-ink);
+    font-size: 1.35rem;
+    -webkit-text-stroke: 3.5px var(--pop-ink);
+    text-shadow: 3px 3px 0 var(--pop-ink);
   }
 
   .pop-menu-sections {
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 6px 10px;
+  }
+
+  .pop-option-group {
+    gap: 3px;
+  }
+
+  .pop-option-label {
+    font-size: 0.72rem;
   }
 
   .pop-choice-btn {
-    padding: 6px 10px;
-    font-size: 0.78rem;
+    padding: 4px 8px;
+    font-size: 0.74rem;
   }
 
   .pop-hint-box {
-    padding: 6px 10px;
-    font-size: 0.72rem;
-    gap: 4px;
+    display: none;
   }
 
   .pop-start-btn {
-    padding: 10px 18px;
-    font-size: 1.1rem;
+    padding: 8px 16px;
+    font-size: 1rem;
   }
 }
 
