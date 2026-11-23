@@ -198,6 +198,10 @@ function stepPlayer(
     player.y = floorCenterY;
     player.vy = 0;
     player.isGrounded = true;
+    if (player.animLock === 'spike') {
+      player.animLock = null;
+      player.animLockTimer = 0;
+    }
   } else {
     player.isGrounded = false;
   }
@@ -220,7 +224,9 @@ function stepBall(ball: BallState, dt: number): void {
 
   const spinRate = ball.spin !== 0 ? ball.spin : ball.vx * 0.01;
   ball.rotation += spinRate * dt;
+}
 
+function recordBallTrail(ball: BallState): void {
   ball.trail.push({ x: ball.x, y: ball.y, isSpiked: ball.isSpiked });
   if (ball.trail.length > 10) {
     ball.trail.shift();
@@ -246,27 +252,30 @@ function collideBallWalls(ball: BallState, events: PhysicsEvents): void {
 }
 
 function collideBallNet(ball: BallState, events: PhysicsEvents): void {
-  // 1. Rounded top cap circle
-  const capDx = ball.x - WORLD.NET_X;
-  const capDy = ball.y - WORLD.NET_TOP_Y;
-  const capDist = Math.hypot(capDx, capDy);
-  const capMinDist = ball.radius + WORLD.NET_CAP_RADIUS;
+  if (ball.y <= WORLD.NET_TOP_Y) {
+    // 1. Rounded top cap circle (upper hemisphere only)
+    const capDx = ball.x - WORLD.NET_X;
+    const capDy = ball.y - WORLD.NET_TOP_Y;
+    const capDist = Math.hypot(capDx, capDy);
+    const capMinDist = ball.radius + WORLD.NET_CAP_RADIUS;
 
-  if (capDist < capMinDist) {
-    const nx = capDist > 0.0001 ? capDx / capDist : 0;
-    const ny = capDist > 0.0001 ? capDy / capDist : -1;
-    ball.x = WORLD.NET_X + nx * capMinDist;
-    ball.y = WORLD.NET_TOP_Y + ny * capMinDist;
+    if (capDist < capMinDist) {
+      const nx = capDist > 0.0001 ? capDx / capDist : 0;
+      const ny = capDist > 0.0001 ? capDy / capDist : -1;
+      ball.x = WORLD.NET_X + nx * capMinDist;
+      ball.y = WORLD.NET_TOP_Y + ny * capMinDist;
 
-    const vn = ball.vx * nx + ball.vy * ny;
-    if (vn < 0) {
-      const restitution = 0.85;
-      ball.vx -= (1 + restitution) * vn * nx;
-      ball.vy -= (1 + restitution) * vn * ny;
+      const vn = ball.vx * nx + ball.vy * ny;
+      if (vn < 0) {
+        const restitution = 0.85;
+        ball.vx -= (1 + restitution) * vn * nx;
+        ball.vy -= (1 + restitution) * vn * ny;
+      }
+
+      ball.isSpiked = false;
+      events.netHit = true;
     }
-
-    ball.isSpiked = false;
-    events.netHit = true;
+    return;
   }
 
   // 2. Rectangular net post below NET_TOP_Y
@@ -407,6 +416,7 @@ export function stepPhysics(
   collideBallPlayer(ball, players[0], inputs[0], events);
   collideBallPlayer(ball, players[1], inputs[1], events);
   collideBallFloor(ball, events);
+  recordBallTrail(ball);
 
   return events;
 }

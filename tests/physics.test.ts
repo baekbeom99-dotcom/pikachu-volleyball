@@ -341,4 +341,149 @@ describe('stepPhysics', () => {
     expect(steepBall.vx).toBeLessThan(-500);
     expect(steepBall.vy).toBeGreaterThan(200);
   });
+
+  it('reflects horizontally on net post just below NET_TOP_Y without downward cap deflection', () => {
+    const p1 = createInitialPlayer('p1');
+    const p2 = createInitialPlayer('p2');
+    const ball = createInitialBall('p1');
+    ball.x = 400;
+    ball.y = 375;
+    ball.vx = 400;
+    ball.vy = 0;
+
+    const events = stepPhysics(
+      [p1, p2],
+      ball,
+      [
+        { moveX: 0, targetX: null, jump: false },
+        { moveX: 0, targetX: null, jump: false },
+      ],
+      WORLD.FIXED_DT,
+    );
+
+    expect(events.netHit).toBe(true);
+    expect(ball.vx).toBeLessThan(0);
+    expect(ball.vy).toBeGreaterThanOrEqual(0);
+    expect(ball.vy).toBeLessThan(30);
+  });
+
+  it('handles animLockTimer expiry, slideCooldown re-slide guard, jump suppression during slide, and spike lock clear on landing', () => {
+    const p1 = createInitialPlayer('p1');
+    const p2 = createInitialPlayer('p2');
+    p1.x = 120;
+    const ball = createInitialBall('p1');
+    ball.x = 220;
+    ball.y = WORLD.FLOOR_Y - 110;
+    ball.vy = 260;
+
+    // Trigger slide
+    const slideEvents = stepPhysics(
+      [p1, p2],
+      ball,
+      [
+        { moveX: 1, targetX: null, jump: true },
+        { moveX: 0, targetX: null, jump: false },
+      ],
+      WORLD.FIXED_DT,
+    );
+
+    expect(slideEvents.slidBy).toBe('p1');
+    expect(p1.isGrounded).toBe(true); // jump suppressed while sliding
+    expect(p1.vy).toBe(0);
+
+    // Step past SLIDE_DURATION while still within SLIDE_COOLDOWN
+    const stepsForSlideEnd = Math.ceil(WORLD.SLIDE_DURATION / WORLD.FIXED_DT) + 1;
+    for (let i = 0; i < stepsForSlideEnd; i++) {
+      ball.x = p1.x + 80;
+      ball.y = WORLD.FLOOR_Y - 110;
+      ball.vy = 260;
+      const ev = stepPhysics(
+        [p1, p2],
+        ball,
+        [
+          { moveX: 1, targetX: null, jump: false },
+          { moveX: 0, targetX: null, jump: false },
+        ],
+        WORLD.FIXED_DT,
+      );
+      expect(ev.slidBy).toBeNull(); // slideCooldown prevents immediate re-slide
+    }
+
+    expect(p1.animLock).toBeNull();
+    expect(p1.animState).toBe('run');
+
+    // Clear spike animLock on landing
+    p1.y = WORLD.FLOOR_Y - WORLD.PLAYER_RADIUS - 1;
+    p1.vy = 100;
+    p1.isGrounded = false;
+    p1.animLock = 'spike';
+    p1.animLockTimer = 0.25;
+
+    stepPhysics(
+      [p1, p2],
+      ball,
+      [
+        { moveX: 0, targetX: null, jump: false },
+        { moveX: 0, targetX: null, jump: false },
+      ],
+      WORLD.FIXED_DT,
+    );
+
+    expect(p1.isGrounded).toBe(true);
+    expect(p1.animLock).toBeNull();
+    expect(p1.animLockTimer).toBe(0);
+    expect(p1.animState).toBe('idle');
+  });
+
+  it('treats dt <= 0 as a safe no-op and records post-collision trail state', () => {
+    const p1 = createInitialPlayer('p1');
+    const p2 = createInitialPlayer('p2');
+    const ball = createInitialBall('p1');
+    const startX = ball.x;
+    const startY = ball.y;
+
+    const noopEvents = stepPhysics(
+      [p1, p2],
+      ball,
+      [
+        { moveX: 1, targetX: null, jump: true },
+        { moveX: -1, targetX: null, jump: false },
+      ],
+      0,
+    );
+
+    expect(noopEvents).toEqual({
+      spikedBy: null,
+      slidBy: null,
+      volleyBy: null,
+      netHit: false,
+      wallHit: false,
+      ballHitFloorSide: null,
+    });
+    expect(ball.x).toBe(startX);
+    expect(ball.y).toBe(startY);
+    expect(ball.trail).toHaveLength(0);
+
+    // Post-collision trail check: airborne spike sets isSpiked=true and pushes post-separation pos
+    p1.x = 220;
+    p1.y = 320;
+    p1.isGrounded = false;
+    ball.x = 250;
+    ball.y = 290;
+    ball.vy = 100;
+    ball.isSpiked = false;
+
+    stepPhysics(
+      [p1, p2],
+      ball,
+      [
+        { moveX: 1, targetX: null, jump: false },
+        { moveX: 0, targetX: null, jump: false },
+      ],
+      WORLD.FIXED_DT,
+    );
+
+    expect(ball.trail).toHaveLength(1);
+    expect(ball.trail[0]).toEqual({ x: ball.x, y: ball.y, isSpiked: true });
+  });
 });
