@@ -75,11 +75,21 @@ describe('MenuUI', () => {
     const ui = new MenuUI(container, callbacks);
 
     expect(container.textContent).toContain('PIKA VOLLEYBALL');
-    expect(container.textContent).toContain('POP ART EDITION');
-    expect(container.textContent).toContain('드래그로 이동');
-    expect(container.textContent).toContain('STEP BACK!');
+    expect(container.textContent).not.toContain('POP ART EDITION');
     expect(container.textContent).not.toContain('캐릭터 외형');
-    expect(container.querySelector('[data-model]')).toBeNull();
+    expect(container.textContent).not.toContain('공중 스파이크');
+    expect(container.querySelector('[data-action="open-motion-guide"]')).toBeNull();
+    for (const sel of [
+      '[data-control="touch"]',
+      '[data-control="motion"]',
+      '[data-opponent="npc"]',
+      '[data-opponent="2p"]',
+      '[data-score="5"]',
+      '[data-score="10"]',
+      '[data-score="15"]',
+    ]) {
+      expect(container.querySelector(`${sel} svg`)).not.toBeNull();
+    }
     expect(ui.getSelections()).toEqual({
       controlMode: 'touch',
       opponentMode: 'npc',
@@ -88,6 +98,14 @@ describe('MenuUI', () => {
     });
 
     container.querySelector<HTMLButtonElement>('[data-control="motion"]')?.click();
+    const guideBtn = container.querySelector<HTMLButtonElement>('[data-action="open-motion-guide"]')!;
+    expect(guideBtn).not.toBeNull();
+    guideBtn.click();
+    expect(container.textContent).toContain('모션 게임 방법');
+    expect(container.textContent).toContain('STEP BACK!');
+    container.querySelector<HTMLButtonElement>('[data-action="close-motion-guide"]')?.click();
+    expect(container.textContent).not.toContain('모션 게임 방법');
+
     container.querySelector<HTMLButtonElement>('[data-opponent="2p"]')?.click();
     container.querySelector<HTMLButtonElement>('[data-score="10"]')?.click();
     container.querySelector<HTMLButtonElement>('[data-action="start-game"]')?.click();
@@ -116,7 +134,8 @@ describe('MenuUI', () => {
 
     expect(muteBtn.textContent).toBe('🔊');
     expect(modelBtn.textContent).toBe('033');
-    expect(menuBtn.textContent).toBe('MENU');
+    expect(menuBtn.querySelector('svg')).not.toBeNull();
+    expect(menuBtn.getAttribute('aria-label')).toBe('Return to menu');
 
     muteBtn.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     expect(parentPointerSpy).not.toHaveBeenCalled();

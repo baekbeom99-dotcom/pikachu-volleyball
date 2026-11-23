@@ -81,6 +81,233 @@ function createFullscreenSvg(isFullscreen: boolean): SVGSVGElement {
   return svg;
 }
 
+function createMenuSvg(): SVGSVGElement {
+  const svgNs = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNs, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', '18');
+  svg.setAttribute('height', '18');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2.8');
+  svg.setAttribute('stroke-linecap', 'square');
+  svg.setAttribute('stroke-linejoin', 'miter');
+
+  const path = document.createElementNS(svgNs, 'path');
+  path.setAttribute('d', 'M 4 6 H 20 M 4 12 H 20 M 4 18 H 20');
+  svg.appendChild(path);
+  return svg;
+}
+
+function createPopIconSvg(
+  buildContent: (svgNs: string, svg: SVGSVGElement) => void,
+  size = 48,
+): SVGSVGElement {
+  const svgNs = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNs, 'svg');
+  svg.setAttribute('xmlns', svgNs);
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  svg.setAttribute('class', 'pop-choice-icon');
+  buildContent(svgNs, svg);
+  return svg;
+}
+
+function svgEl(
+  svgNs: string,
+  tag: string,
+  attrs: Record<string, string | number>,
+): Element {
+  const el = document.createElementNS(svgNs, tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    el.setAttribute(k, String(v));
+  }
+  return el;
+}
+
+function createJoystickSvg(): SVGSVGElement {
+  return createPopIconSvg((ns, svg) => {
+    svg.append(
+      svgEl(ns, 'rect', {
+        x: 4.5,
+        y: 14.5,
+        width: 15,
+        height: 5.5,
+        rx: 2,
+        fill: '#ffe600',
+        stroke: '#111111',
+        'stroke-width': 2,
+      }),
+      svgEl(ns, 'line', {
+        x1: 12,
+        y1: 9.5,
+        x2: 12,
+        y2: 14.5,
+        stroke: '#111111',
+        'stroke-width': 2.2,
+        'stroke-linecap': 'round',
+      }),
+      svgEl(ns, 'circle', {
+        cx: 12,
+        cy: 7,
+        r: 4,
+        fill: '#ff2a85',
+        stroke: '#111111',
+        'stroke-width': 2,
+      }),
+    );
+  });
+}
+
+function createMotionSvg(): SVGSVGElement {
+  return createPopIconSvg((ns, svg) => {
+    svg.append(
+      svgEl(ns, 'path', {
+        d: 'M 4 8 V 4 H 8 M 16 4 H 20 V 8 M 20 16 V 20 H 16 M 8 20 H 4 V 16',
+        fill: 'none',
+        stroke: '#111111',
+        'stroke-width': 2,
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round',
+      }),
+      svgEl(ns, 'circle', {
+        cx: 12,
+        cy: 8,
+        r: 2.3,
+        fill: '#ffe600',
+        stroke: '#111111',
+        'stroke-width': 1.9,
+      }),
+      svgEl(ns, 'path', {
+        d: 'M 7.5 11.5 Q 12 14.2 16.5 11.5 M 12 13 V 16.5 M 9.2 19.2 L 12 16.5 L 14.8 19.2',
+        fill: 'none',
+        stroke: '#111111',
+        'stroke-width': 2,
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round',
+      }),
+    );
+  });
+}
+
+function createNpcSvg(): SVGSVGElement {
+  return createPopIconSvg((ns, svg) => {
+    svg.append(
+      svgEl(ns, 'circle', {
+        cx: 7.5,
+        cy: 8.5,
+        r: 2.6,
+        fill: '#ffe600',
+        stroke: '#111111',
+        'stroke-width': 1.9,
+      }),
+      svgEl(ns, 'path', {
+        d: 'M 3.5 19 C 3.5 14.8 11.5 14.8 11.5 19',
+        fill: '#ffe600',
+        stroke: '#111111',
+        'stroke-width': 1.9,
+        'stroke-linecap': 'round',
+      }),
+      svgEl(ns, 'line', {
+        x1: 17,
+        y1: 4.2,
+        x2: 17,
+        y2: 6.5,
+        stroke: '#111111',
+        'stroke-width': 1.9,
+        'stroke-linecap': 'round',
+      }),
+      svgEl(ns, 'rect', {
+        x: 13.5,
+        y: 6.5,
+        width: 7,
+        height: 5.5,
+        rx: 1.6,
+        fill: '#00d4ff',
+        stroke: '#111111',
+        'stroke-width': 1.9,
+      }),
+      svgEl(ns, 'path', {
+        d: 'M 13 19 C 13 15 21 15 21 19',
+        fill: '#00d4ff',
+        stroke: '#111111',
+        'stroke-width': 1.9,
+        'stroke-linecap': 'round',
+      }),
+    );
+  });
+}
+
+function createTwoPlayerSvg(): SVGSVGElement {
+  return createPopIconSvg((ns, svg) => {
+    svg.append(
+      svgEl(ns, 'circle', {
+        cx: 7.5,
+        cy: 8.5,
+        r: 2.6,
+        fill: '#ffe600',
+        stroke: '#111111',
+        'stroke-width': 1.9,
+      }),
+      svgEl(ns, 'path', {
+        d: 'M 3.5 19 C 3.5 14.8 11.5 14.8 11.5 19',
+        fill: '#ffe600',
+        stroke: '#111111',
+        'stroke-width': 1.9,
+        'stroke-linecap': 'round',
+      }),
+      svgEl(ns, 'circle', {
+        cx: 16.5,
+        cy: 8.5,
+        r: 2.6,
+        fill: '#00d4ff',
+        stroke: '#111111',
+        'stroke-width': 1.9,
+      }),
+      svgEl(ns, 'path', {
+        d: 'M 12.5 19 C 12.5 14.8 20.5 14.8 20.5 19',
+        fill: '#00d4ff',
+        stroke: '#111111',
+        'stroke-width': 1.9,
+        'stroke-linecap': 'round',
+      }),
+    );
+  });
+}
+
+function createTrophySvg(): SVGSVGElement {
+  return createPopIconSvg((ns, svg) => {
+    svg.append(
+      svgEl(ns, 'path', {
+        d: 'M 7.5 5 H 16.5 V 10 C 16.5 12.8 14.5 14.8 12 14.8 C 9.5 14.8 7.5 12.8 7.5 10 Z',
+        fill: '#ffe600',
+        stroke: '#111111',
+        'stroke-width': 2,
+        'stroke-linejoin': 'round',
+      }),
+      svgEl(ns, 'path', {
+        d: 'M 7.5 6.8 H 5 C 5 10.2 6.2 11.2 7.5 11.2 M 16.5 6.8 H 19 C 19 10.2 17.8 11.2 16.5 11.2',
+        fill: 'none',
+        stroke: '#111111',
+        'stroke-width': 1.9,
+        'stroke-linecap': 'round',
+      }),
+      svgEl(ns, 'path', {
+        d: 'M 12 14.8 V 18.5 M 8.5 19 H 15.5',
+        fill: 'none',
+        stroke: '#111111',
+        'stroke-width': 2.1,
+        'stroke-linecap': 'round',
+      }),
+    );
+  }, 42);
+}
+
 function createOptionGroup(
   labelText: string,
   buttons: HTMLButtonElement[],
@@ -121,6 +348,7 @@ export class MenuUI {
   private screen: MenuScreen = 'MENU';
   private muted = false;
   private fullscreen = false;
+  private showMotionGuide = false;
   private matchOverSummary: MatchOverSummary | null = null;
   private cameraError: string | null = null;
 
@@ -153,6 +381,7 @@ export class MenuUI {
   /** Updates the active screen ('MENU' or 'IN_GAME') and re-renders #ui-overlay. */
   setScreen(screen: 'MENU' | 'IN_GAME'): void {
     this.screen = screen;
+    this.showMotionGuide = false;
     this.matchOverSummary = null;
     this.render();
   }
@@ -248,6 +477,9 @@ export class MenuUI {
 
     if (this.screen === 'MENU') {
       this.container.appendChild(this.buildStartMenu());
+      if (this.showMotionGuide) {
+        this.container.appendChild(this.buildMotionGuideModal());
+      }
     } else if (this.screen === 'IN_GAME') {
       this.container.appendChild(this.buildHudBar());
     } else if (this.screen === 'MATCH_OVER' && this.matchOverSummary) {
@@ -283,112 +515,117 @@ export class MenuUI {
     topRightActions.className = 'pop-menu-top-actions';
     topRightActions.appendChild(this.buildFullscreenButton('pop-btn pop-hud-btn pop-icon-btn'));
 
-    const badge = document.createElement('span');
-    badge.className = 'pop-badge pop-badge--magenta';
-    badge.textContent = 'POP ART EDITION';
-
     const title = document.createElement('h1');
     title.className = 'pop-menu-title';
     title.textContent = 'PIKA VOLLEYBALL';
 
-    header.append(topRightActions, badge, title);
+    header.append(topRightActions, title);
 
     const sections = document.createElement('div');
     sections.className = 'pop-menu-sections';
 
     const controlButtons = [
-      this.buildChoiceButton(
-        '터치패드 모드 (다이나믹 조이스틱)',
+      this.buildIconChoiceButton(
+        createJoystickSvg(),
+        '터치',
         this.selections.controlMode === 'touch',
         () => {
           this.selections.controlMode = 'touch';
+          this.showMotionGuide = false;
           this.render();
         },
-        { 'data-control': 'touch' },
+        {
+          'data-control': 'touch',
+          'aria-label': '터치패드 모드 (다이나믹 조이스틱)',
+          title: '터치패드 모드 (다이나믹 조이스틱)',
+        },
       ),
-      this.buildChoiceButton(
-        '모션인식 모드 (웹캠 좌/우 분할)',
+      this.buildIconChoiceButton(
+        createMotionSvg(),
+        '모션',
         this.selections.controlMode === 'motion',
         () => {
           this.selections.controlMode = 'motion';
           this.render();
         },
-        { 'data-control': 'motion' },
+        {
+          'data-control': 'motion',
+          'aria-label': '모션인식 모드 (웹캠 좌/우 분할)',
+          title: '모션인식 모드 (웹캠 좌/우 분할)',
+        },
       ),
     ];
 
     const opponentButtons = [
-      this.buildChoiceButton(
-        '1P (vs NPC)',
+      this.buildIconChoiceButton(
+        createNpcSvg(),
+        '1P',
         this.selections.opponentMode === 'npc',
         () => {
           this.selections.opponentMode = 'npc';
           this.render();
         },
-        { 'data-opponent': 'npc' },
+        {
+          'data-opponent': 'npc',
+          'aria-label': '1P (vs NPC)',
+          title: '1P (vs NPC)',
+        },
       ),
-      this.buildChoiceButton(
-        '2P (로컬 대전)',
+      this.buildIconChoiceButton(
+        createTwoPlayerSvg(),
+        '2P',
         this.selections.opponentMode === '2p',
         () => {
           this.selections.opponentMode = '2p';
           this.render();
         },
-        { 'data-opponent': '2p' },
+        {
+          'data-opponent': '2p',
+          'aria-label': '2P (로컬 대전)',
+          title: '2P (로컬 대전)',
+        },
       ),
     ];
 
     const scoreOptions: TargetScoreOption[] = [5, 10, 15];
     const scoreButtons = scoreOptions.map((score) =>
-      this.buildChoiceButton(
-        `${score}점`,
+      this.buildIconChoiceButton(
+        createTrophySvg(),
+        `${score}`,
         this.selections.targetScore === score,
         () => {
           this.selections.targetScore = score;
           this.render();
         },
-        { 'data-score': String(score) },
+        {
+          'data-score': String(score),
+          'aria-label': `${score}점`,
+          title: `${score}점`,
+        },
       ),
     );
 
     sections.append(
-      createOptionGroup('조작 모드', controlButtons),
-      createOptionGroup('플레이어 모드', opponentButtons),
-      createOptionGroup('목표 점수', scoreButtons),
+      createOptionGroup('MODE', controlButtons),
+      createOptionGroup('PLAYERS', opponentButtons),
+      createOptionGroup('SCORE', scoreButtons),
     );
 
-    const hintBox = document.createElement('div');
-    hintBox.className = 'pop-hint-box';
+    const actions = document.createElement('div');
+    actions.className = 'pop-menu-actions';
 
-    const touchHint = document.createElement('div');
-    touchHint.className =
-      this.selections.controlMode === 'touch'
-        ? 'pop-hint-item is-highlighted'
-        : 'pop-hint-item';
-    const touchStrong = document.createElement('strong');
-    touchStrong.textContent = '[터치패드]';
-    touchHint.append(
-      touchStrong,
-      document.createTextNode(
-        '드래그로 이동, 위쪽으로 점프, 공중 자동 스파이크 & 낮은 공 질주 시 자동 다이빙 (PC 키보드 WASD / 방향키 병행 가능).',
-      ),
-    );
-
-    const motionHint = document.createElement('div');
-    motionHint.className =
-      this.selections.controlMode === 'motion'
-        ? 'pop-hint-item is-highlighted'
-        : 'pop-hint-item';
-    const motionStrong = document.createElement('strong');
-    motionStrong.textContent = '[모션인식]';
-    motionHint.append(
-      motionStrong,
-      document.createTextNode(
-        '카메라 좌/우 분할, 중앙선을 넘어도 상대에게 영향 없음, 너무 가까우면 "STEP BACK!" 안내 후 자동 대기.',
-      ),
-    );
-
-    hintBox.append(touchHint, motionHint);
+    if (this.selections.controlMode === 'motion') {
+      const guideBtn = createButton(
+        '모션 설명',
+        'pop-btn pop-btn--cyan pop-guide-btn',
+        () => {
+          this.showMotionGuide = true;
+          this.render();
+        },
+        { 'data-action': 'open-motion-guide' },
+      );
+      actions.appendChild(guideBtn);
+    }
 
     const startBtn = createButton(
       'GAME START!',
@@ -396,26 +633,84 @@ export class MenuUI {
       () => this.callbacks.onStartMatch(this.getSelections()),
       { 'data-action': 'start-game' },
     );
+    actions.appendChild(startBtn);
 
-    card.append(header, sections, hintBox, startBtn);
+    card.append(header, sections, actions);
     return card;
   }
 
-  private buildChoiceButton(
-    label: string,
+  private buildMotionGuideModal(): HTMLElement {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'pop-modal-backdrop';
+    stopPointerPropagation(backdrop);
+
+    const card = document.createElement('section');
+    card.className = 'pop-modal-card';
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-modal', 'true');
+    card.setAttribute('aria-label', 'Motion Game Guide');
+    stopPointerPropagation(card);
+
+    const badge = document.createElement('span');
+    badge.className = 'pop-badge pop-badge--cyan';
+    badge.textContent = 'MOTION GUIDE';
+
+    const title = document.createElement('h2');
+    title.className = 'pop-guide-title';
+    title.textContent = '모션 게임 방법';
+
+    const list = document.createElement('ul');
+    list.className = 'pop-guide-list';
+    const items = [
+      '📷 좌/우 분할: 카메라 반쪽에서 플레이하며 중앙선을 넘어도 상대에게 영향 없음',
+      '🏃 좌우 이동: 몸을 좌우로 움직이면 캐릭터가 코트 안에서 이동',
+      '🙌 점프 & 스파이크: 제자리 점프 또는 두 손을 머리 위로 들기',
+      '↔️ 거리 체크: "STEP BACK!"이 뜨면 카메라에서 한 걸음 물러나기',
+    ];
+    for (const text of items) {
+      const li = document.createElement('li');
+      li.textContent = text;
+      list.appendChild(li);
+    }
+
+    const closeBtn = createButton(
+      '확인',
+      'pop-btn pop-btn--magenta pop-start-btn',
+      () => {
+        this.showMotionGuide = false;
+        this.render();
+      },
+      { 'data-action': 'close-motion-guide' },
+    );
+
+    card.append(badge, title, list, closeBtn);
+    backdrop.appendChild(card);
+    return backdrop;
+  }
+
+  private buildIconChoiceButton(
+    icon: SVGSVGElement,
+    labelText: string,
     selected: boolean,
     onClick: () => void,
     attrs: Record<string, string>,
   ): HTMLButtonElement {
-    return createButton(
-      label,
-      selected ? 'pop-btn pop-choice-btn is-selected' : 'pop-btn pop-choice-btn',
+    const btn = createButton(
+      '',
+      selected
+        ? 'pop-btn pop-choice-btn pop-choice-tile is-selected'
+        : 'pop-btn pop-choice-btn pop-choice-tile',
       onClick,
       {
         ...attrs,
         'aria-pressed': selected ? 'true' : 'false',
       },
     );
+    const label = document.createElement('span');
+    label.className = 'pop-choice-tile-label';
+    label.textContent = labelText;
+    btn.replaceChildren(icon, label);
+    return btn;
   }
 
   private buildHudBar(): HTMLElement {
@@ -475,14 +770,16 @@ export class MenuUI {
     );
 
     const menuBtn = createButton(
-      'MENU',
-      'pop-btn pop-btn--magenta pop-hud-btn',
+      '',
+      'pop-btn pop-btn--magenta pop-hud-btn pop-icon-btn',
       () => this.callbacks.onReturnMenu(),
       {
         'data-action': 'open-menu',
         'aria-label': 'Return to menu',
+        title: '메뉴',
       },
     );
+    menuBtn.replaceChildren(createMenuSvg());
 
     rightGroup.append(fullscreenBtn, menuBtn);
     bar.append(leftGroup, rightGroup);

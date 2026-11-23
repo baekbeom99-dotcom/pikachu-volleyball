@@ -392,14 +392,16 @@ export class PopArtSceneRenderer {
   }
 
   private drawBall(ctx: CanvasRenderingContext2D, ball: BallState): void {
+    const r = ball.radius;
+
     // Floor shadow ellipse under ball
-    const height = Math.max(0, WORLD.FLOOR_Y - (ball.y + ball.radius));
+    const height = Math.max(0, WORLD.FLOOR_Y - (ball.y + r));
     const proximity = Math.max(0.28, 1 - height / 460);
     ctx.save();
     ctx.globalAlpha = 0.26 * proximity;
     ctx.fillStyle = POP_PALETTE.SHADOW;
     ctx.beginPath();
-    ctx.ellipse(ball.x, WORLD.FLOOR_Y + 2, ball.radius * proximity, 7 * proximity, 0, 0, Math.PI * 2);
+    ctx.ellipse(ball.x, WORLD.FLOOR_Y + 2, r * proximity, 7 * proximity, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
@@ -413,64 +415,174 @@ export class PopArtSceneRenderer {
       ctx.strokeStyle = POP_PALETTE.MAGENTA;
       ctx.lineWidth = 5;
       ctx.beginPath();
-      ctx.arc(0, 0, ball.radius + 6, 0, Math.PI * 2);
+      ctx.arc(0, 0, r + 6, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
 
-    ctx.rotate(ball.rotation);
-
-    // Clip panels inside volleyball circle
+    // Clip all interior panels, shading, and highlights inside ball circle
     ctx.save();
     ctx.beginPath();
-    ctx.arc(0, 0, ball.radius, 0, Math.PI * 2);
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.clip();
 
     ctx.fillStyle = POP_PALETTE.CREAM;
-    ctx.fillRect(-ball.radius, -ball.radius, ball.radius * 2, ball.radius * 2);
+    ctx.fillRect(-r, -r, r * 2, r * 2);
 
-    // Pop-Art yellow & magenta volleyball panels
-    ctx.fillStyle = POP_PALETTE.YELLOW;
-    ctx.beginPath();
-    ctx.moveTo(-ball.radius, -ball.radius * 0.2);
-    ctx.quadraticCurveTo(0, -ball.radius * 0.9, ball.radius, -ball.radius * 0.15);
-    ctx.lineTo(ball.radius, -ball.radius);
-    ctx.lineTo(-ball.radius, -ball.radius);
-    ctx.closePath();
-    ctx.fill();
+    // Classic 18-panel 3-sector woven volleyball (Blue, Yellow, Cream) matching reference
+    ctx.save();
+    ctx.rotate(ball.rotation);
 
-    ctx.fillStyle = POP_PALETTE.MAGENTA;
-    ctx.beginPath();
-    ctx.moveTo(-ball.radius, ball.radius * 0.35);
-    ctx.quadraticCurveTo(0, ball.radius * 0.85, ball.radius, ball.radius * 0.3);
-    ctx.lineTo(ball.radius, ball.radius);
-    ctx.lineTo(-ball.radius, ball.radius);
-    ctx.closePath();
-    ctx.fill();
+    const VOLLEY_BLUE = '#4E6CD9';
+    const seamCtrlAngleOffset = -0.14;
+    const seamCtrlR = r * 0.56;
+    const edgeR = r * 1.18;
+    const baseAngle = -Math.PI / 2;
+    const sectorStep = (Math.PI * 2) / 3;
 
-    // Seam lines
+    const sectorBands: ReadonlyArray<readonly [string, string, string]> = [
+      [VOLLEY_BLUE, POP_PALETTE.YELLOW, POP_PALETTE.CREAM], // Top-right sector
+      [POP_PALETTE.YELLOW, VOLLEY_BLUE, POP_PALETTE.CREAM], // Bottom sector
+      [POP_PALETTE.YELLOW, VOLLEY_BLUE, POP_PALETTE.CREAM], // Top-left sector
+    ];
+
+    const seamCoords = (angle: number) => ({
+      cx: seamCtrlR * Math.cos(angle + seamCtrlAngleOffset),
+      cy: seamCtrlR * Math.sin(angle + seamCtrlAngleOffset),
+      ex: edgeR * Math.cos(angle),
+      ey: edgeR * Math.sin(angle),
+    });
+
+    for (let k = 0; k < 3; k++) {
+      const a0 = baseAngle + k * sectorStep;
+      const a1 = a0 + sectorStep;
+      const s0 = seamCoords(a0);
+      const s1 = seamCoords(a1);
+      const [innerColor, midColor, outerColor] = sectorBands[k];
+
+      ctx.save();
+      // Clip to curved 120-degree sector wedge
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(s0.cx, s0.cy, s0.ex, s0.ey);
+      ctx.arc(0, 0, edgeR, a0, a1);
+      ctx.quadraticCurveTo(s1.cx, s1.cy, 0, 0);
+      ctx.closePath();
+      ctx.clip();
+
+      // Orient local axes so seam `a1` sits roughly along +X and stripes bow toward `-Y`
+      ctx.rotate(a1);
+
+      const spanL = -r * 0.5;
+      const spanR = r * 1.25;
+      const midX = r * 0.42;
+      const y1 = -r * 0.34;
+      const y2 = -r * 0.68;
+
+      // Outer Cream cap
+      ctx.fillStyle = outerColor;
+      ctx.fillRect(-r * 1.3, -r * 1.3, r * 2.6, r * 2.6);
+
+      // Middle band
+      ctx.fillStyle = midColor;
+      ctx.beginPath();
+      ctx.moveTo(spanL, y2 + r * 0.12);
+      ctx.quadraticCurveTo(midX, y2 - r * 0.18, spanR, y2 + r * 0.16);
+      ctx.lineTo(spanR, r * 0.5);
+      ctx.lineTo(spanL, r * 0.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Inner band bordering seam `a1`
+      ctx.fillStyle = innerColor;
+      ctx.beginPath();
+      ctx.moveTo(spanL, y1 + r * 0.12);
+      ctx.quadraticCurveTo(midX, y1 - r * 0.18, spanR, y1 + r * 0.16);
+      ctx.lineTo(spanR, r * 0.5);
+      ctx.lineTo(spanL, r * 0.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Dividing stripe seam lines inside sector
+      ctx.strokeStyle = POP_PALETTE.INK;
+      ctx.lineWidth = 2.6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(spanL, y1 + r * 0.12);
+      ctx.quadraticCurveTo(midX, y1 - r * 0.18, spanR, y1 + r * 0.16);
+      ctx.moveTo(spanL, y2 + r * 0.12);
+      ctx.quadraticCurveTo(midX, y2 - r * 0.18, spanR, y2 + r * 0.16);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // Three primary curved Y-seams radiating from center
     ctx.strokeStyle = POP_PALETTE.INK;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2.9;
+    ctx.lineCap = 'round';
+    for (let k = 0; k < 3; k++) {
+      const s = seamCoords(baseAngle + k * sectorStep);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(s.cx, s.cy, s.ex, s.ey);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Two-step spherical shading crescent on bottom-right (`음영`)
+    ctx.save();
+    ctx.globalAlpha = 0.11;
+    ctx.fillStyle = POP_PALETTE.INK;
     ctx.beginPath();
-    ctx.moveTo(-ball.radius, -ball.radius * 0.2);
-    ctx.quadraticCurveTo(0, -ball.radius * 0.9, ball.radius, -ball.radius * 0.15);
-    ctx.moveTo(-ball.radius, ball.radius * 0.35);
-    ctx.quadraticCurveTo(0, ball.radius * 0.85, ball.radius, ball.radius * 0.3);
-    ctx.moveTo(-ball.radius * 0.15, -ball.radius);
-    ctx.quadraticCurveTo(ball.radius * 0.28, 0, -ball.radius * 0.1, ball.radius);
+    ctx.arc(0, 0, r * 1.02, -0.35, Math.PI * 0.88);
+    ctx.quadraticCurveTo(
+      r * 0.04,
+      r * 0.16,
+      r * 1.02 * Math.cos(-0.35),
+      r * 1.02 * Math.sin(-0.35),
+    );
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.globalAlpha = 0.18;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.02, -0.18, Math.PI * 0.78);
+    ctx.quadraticCurveTo(
+      r * 0.22,
+      r * 0.28,
+      r * 1.02 * Math.cos(-0.18),
+      r * 1.02 * Math.sin(-0.18),
+    );
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Glossy specular highlights on upper-left (`반사광`)
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.86)';
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.36, -r * 0.36, r * 0.24, r * 0.12, -0.65, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(-r * 0.14, -r * 0.56, r * 0.075, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.86, Math.PI * 1.08, Math.PI * 1.42);
     ctx.stroke();
     ctx.restore();
 
-    // Specular highlight & bold outer ink outline
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-    ctx.beginPath();
-    ctx.ellipse(-ball.radius * 0.36, -ball.radius * 0.36, 7, 4, -0.6, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.restore();
 
+    // Bold Pop-Art outer ink outline
     ctx.strokeStyle = POP_PALETTE.INK;
     ctx.lineWidth = 3.5;
     ctx.beginPath();
-    ctx.arc(0, 0, ball.radius, 0, Math.PI * 2);
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
