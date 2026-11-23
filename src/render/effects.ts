@@ -1,6 +1,6 @@
 import { WORLD } from '../core/constants';
 import type { BallState, GameState } from '../core/types';
-import { POP_PALETTE, drawPopText } from './palette';
+import { POP_DISPLAY_FONT, POP_PALETTE, drawPopText } from './palette';
 
 interface ComicBurst {
   text: string;
@@ -223,7 +223,7 @@ export class EffectsManager {
       ctx.stroke();
 
       drawPopText(ctx, burst.text, 0, 0.5, {
-        font: '900 11px "Russo One", "Chakra Petch", Impact, "Arial Black", sans-serif',
+        font: `900 11px ${POP_DISPLAY_FONT}`,
         fill: POP_PALETTE.CREAM,
         strokeWidth: 2.5,
         shadowOffsetX: 1.5,

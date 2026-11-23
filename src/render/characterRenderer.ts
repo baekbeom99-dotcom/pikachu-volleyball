@@ -1,6 +1,6 @@
 import { WORLD } from '../core/constants';
 import type { CharacterAnimState, PlayerId } from '../core/types';
-import { POP_PALETTE } from './palette';
+import { POP_DISPLAY_FONT, POP_PALETTE } from './palette';
 
 export interface CharacterRenderData {
   playerId: PlayerId;
@@ -152,7 +152,7 @@ export function drawPlayerBadge(
   ctx.stroke();
 
   ctx.fillStyle = textFill;
-  ctx.font = '900 12px Impact, "Arial Black", sans-serif';
+  ctx.font = `900 12px ${POP_DISPLAY_FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, x, by + badgeH * 0.54);

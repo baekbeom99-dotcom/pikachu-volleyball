@@ -78,6 +78,8 @@ describe('MenuUI', () => {
     expect(container.textContent).toContain('POP ART EDITION');
     expect(container.textContent).toContain('드래그로 이동');
     expect(container.textContent).toContain('STEP BACK!');
+    expect(container.textContent).not.toContain('캐릭터 외형');
+    expect(container.querySelector('[data-model]')).toBeNull();
     expect(ui.getSelections()).toEqual({
       controlMode: 'touch',
       opponentMode: 'npc',
@@ -88,14 +90,13 @@ describe('MenuUI', () => {
     container.querySelector<HTMLButtonElement>('[data-control="motion"]')?.click();
     container.querySelector<HTMLButtonElement>('[data-opponent="2p"]')?.click();
     container.querySelector<HTMLButtonElement>('[data-score="10"]')?.click();
-    container.querySelector<HTMLButtonElement>('[data-model="placeholder"]')?.click();
     container.querySelector<HTMLButtonElement>('[data-action="start-game"]')?.click();
 
     expect(callbacks.onStartMatch).toHaveBeenCalledWith({
       controlMode: 'motion',
       opponentMode: '2p',
       targetScore: 10,
-      usePlaceholderModel: true,
+      usePlaceholderModel: false,
     });
 
     ui.dispose();
@@ -193,7 +194,6 @@ describe('MenuUI', () => {
       '[data-control="motion"]',
       '[data-opponent="2p"]',
       '[data-score="10"]',
-      '[data-model="placeholder"]',
     ];
     for (const selector of selectors) {
       const btn = container.querySelector<HTMLButtonElement>(selector)!;

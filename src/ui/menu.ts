@@ -32,7 +32,6 @@ const FOCUS_ATTRS = [
   'data-control',
   'data-opponent',
   'data-score',
-  'data-model',
 ] as const;
 
 function stopPointerPropagation(el: HTMLElement): void {
@@ -352,32 +351,10 @@ export class MenuUI {
       ),
     );
 
-    const modelButtons = [
-      this.buildChoiceButton(
-        '033 스프라이트',
-        !this.selections.usePlaceholderModel,
-        () => {
-          this.selections.usePlaceholderModel = false;
-          this.render();
-        },
-        { 'data-model': '033' },
-      ),
-      this.buildChoiceButton(
-        '임시 테스트 모델',
-        this.selections.usePlaceholderModel,
-        () => {
-          this.selections.usePlaceholderModel = true;
-          this.render();
-        },
-        { 'data-model': 'placeholder' },
-      ),
-    ];
-
     sections.append(
       createOptionGroup('조작 모드', controlButtons),
       createOptionGroup('플레이어 모드', opponentButtons),
       createOptionGroup('목표 점수', scoreButtons),
-      createOptionGroup('캐릭터 외형', modelButtons),
     );
 
     const hintBox = document.createElement('div');

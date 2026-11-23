@@ -158,7 +158,7 @@ export class Sprite033Renderer implements CharacterRenderer {
   private loadPromise: Promise<void> | null = null;
   private loaded = false;
 
-  constructor(basePath = '/sprites/033') {
+  constructor(basePath = './sprites/033') {
     this.basePath = basePath.replace(/\/+$/, '');
   }
 

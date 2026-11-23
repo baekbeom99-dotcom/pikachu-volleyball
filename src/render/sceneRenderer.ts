@@ -14,6 +14,7 @@ import {
 } from './characterRenderer';
 import { EffectsManager } from './effects';
 import {
+  POP_DISPLAY_FONT,
   POP_PALETTE,
   createBenDayPattern,
   drawPopPanel,
@@ -158,7 +159,7 @@ export class PopArtSceneRenderer {
         frameX + frameW * 0.5,
         frameY + frameH * 0.5,
         {
-          font: '900 18px Impact, "Arial Black", sans-serif',
+          font: `900 18px ${POP_DISPLAY_FONT}`,
           fill: POP_PALETTE.YELLOW,
           strokeWidth: 4,
           shadowOffsetX: 2,
@@ -184,7 +185,7 @@ export class PopArtSceneRenderer {
           : 'HUMAN  |  NPC';
     drawPopPanel(ctx, midX - 58, frameY - 12, 116, 24, POP_PALETTE.YELLOW, 3, 3);
     drawPopText(ctx, splitLabel, midX, frameY, {
-      font: '900 13px Impact, "Arial Black", sans-serif',
+      font: `900 13px ${POP_DISPLAY_FONT}`,
       fill: POP_PALETTE.INK,
       strokeWidth: 0,
       shadowOffsetX: 0,
@@ -234,7 +235,7 @@ export class PopArtSceneRenderer {
     if (status.gateStatus === 'OK') {
       drawPopPanel(ctx, x + 8, y + h - 42, w - 16, 32, POP_PALETTE.LIME, 3, 3);
       drawPopText(ctx, 'OK! READY', x + w * 0.5, y + h - 26, {
-        font: '900 16px Impact, "Arial Black", sans-serif',
+        font: `900 16px ${POP_DISPLAY_FONT}`,
         fill: POP_PALETTE.INK,
         strokeWidth: 0,
         shadowOffsetX: 0,
@@ -260,7 +261,7 @@ export class PopArtSceneRenderer {
     drawPopPanel(ctx, x + 4, boxY, w - 8, boxH, bannerFill, 4, 3);
 
     drawPopText(ctx, title, x + w * 0.5, boxY + 22, {
-      font: '900 20px Impact, "Arial Black", sans-serif',
+      font: `900 20px ${POP_DISPLAY_FONT}`,
       fill: bannerTextFill,
       strokeColor: POP_PALETTE.INK,
       strokeWidth: isTooClose ? 3.5 : 0,
@@ -529,7 +530,7 @@ export class PopArtSceneRenderer {
       ctx.stroke();
 
       drawPopText(ctx, 'JUMP', ox, oy - outerR - 10, {
-        font: '900 11px Impact, "Arial Black", sans-serif',
+        font: `900 11px ${POP_DISPLAY_FONT}`,
         fill: joy.jumpActive ? POP_PALETTE.LIME : POP_PALETTE.CREAM,
         strokeWidth: 3,
         shadowOffsetX: 1,
@@ -562,7 +563,7 @@ export class PopArtSceneRenderer {
     // P1 score badge
     drawPopPanel(ctx, 22, topY, sideW, panelH, POP_PALETTE.YELLOW, 4, 4);
     drawPopText(ctx, `P1  ${state.scores.p1}`, 22 + sideW * 0.5, topY + panelH * 0.52, {
-      font: '900 24px Impact, "Arial Black", sans-serif',
+      font: `900 24px ${POP_DISPLAY_FONT}`,
       fill: POP_PALETTE.INK,
       strokeWidth: 0,
       shadowOffsetX: 0,
@@ -579,7 +580,7 @@ export class PopArtSceneRenderer {
       WORLD.NET_X,
       topY + 23,
       {
-        font: '900 16px Impact, "Arial Black", sans-serif',
+        font: `900 16px ${POP_DISPLAY_FONT}`,
         fill: POP_PALETTE.INK,
         strokeWidth: 0,
         shadowOffsetX: 0,
@@ -602,7 +603,7 @@ export class PopArtSceneRenderer {
       p2X + sideW * 0.5,
       topY + panelH * 0.52,
       {
-        font: '900 24px Impact, "Arial Black", sans-serif',
+        font: `900 24px ${POP_DISPLAY_FONT}`,
         fill: p2Text,
         strokeWidth: 0,
         shadowOffsetX: 0,
@@ -615,7 +616,7 @@ export class PopArtSceneRenderer {
     if (state.phase === 'READY_SERVE') {
       const label = state.phaseTimer < 0.22 ? 'GO!' : 'READY!';
       drawPopText(ctx, label, WORLD.NET_X, 170, {
-        font: '900 58px Impact, "Arial Black", sans-serif',
+        font: `900 58px ${POP_DISPLAY_FONT}`,
         fill: state.phaseTimer < 0.22 ? POP_PALETTE.LIME : POP_PALETTE.YELLOW,
         strokeWidth: 7,
         shadowOffsetX: 5,
@@ -632,7 +633,7 @@ export class PopArtSceneRenderer {
             ? 'NPC POINT!'
             : 'P2 POINT!';
       drawPopText(ctx, scorerLabel, WORLD.NET_X, 168, {
-        font: '900 52px Impact, "Arial Black", sans-serif',
+        font: `900 52px ${POP_DISPLAY_FONT}`,
         fill: state.lastScorer === 'p1' ? POP_PALETTE.YELLOW : POP_PALETTE.MAGENTA,
         strokeWidth: 7,
         shadowOffsetX: 5,
@@ -649,7 +650,7 @@ export class PopArtSceneRenderer {
             ? 'NPC WINS!'
             : 'P2 WINS!';
       drawPopText(ctx, winnerLabel, WORLD.NET_X, 148, {
-        font: '900 62px Impact, "Arial Black", sans-serif',
+        font: `900 62px ${POP_DISPLAY_FONT}`,
         fill: state.winner === 'p1' ? POP_PALETTE.YELLOW : POP_PALETTE.MAGENTA,
         strokeWidth: 8,
         shadowOffsetX: 6,

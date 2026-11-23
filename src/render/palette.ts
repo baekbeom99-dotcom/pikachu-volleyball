@@ -10,6 +10,9 @@ export const POP_PALETTE = {
   LIME: '#A3E635',
 } as const;
 
+export const POP_DISPLAY_FONT =
+  '"Russo One", "Chakra Petch", "Bahnschrift", "Arial Black", "Noto Sans KR", sans-serif';
+
 export interface PopTextOptions {
   font?: string;
   fill?: string;
@@ -168,7 +171,7 @@ export function drawPopText(
   options: PopTextOptions = {},
 ): void {
   const {
-    font = '900 28px Impact, "Arial Black", "Noto Sans KR", sans-serif',
+    font = `900 28px ${POP_DISPLAY_FONT}`,
     fill = POP_PALETTE.YELLOW,
     strokeColor = POP_PALETTE.INK,
     strokeWidth = 5,
@@ -184,8 +187,8 @@ export function drawPopText(
   ctx.font = font;
   ctx.textAlign = align;
   ctx.textBaseline = baseline;
-  ctx.lineJoin = 'round';
-  ctx.miterLimit = 2;
+  ctx.lineJoin = 'miter';
+  ctx.miterLimit = 3;
 
   if (shadowOffsetX !== 0 || shadowOffsetY !== 0) {
     ctx.fillStyle = shadowColor;
