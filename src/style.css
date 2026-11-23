@@ -106,6 +106,7 @@ body {
   justify-content: center;
   gap: 8px;
   padding: 12px 20px;
+  word-break: keep-all;
   font-family: var(--pop-font);
   font-size: 1.05rem;
   letter-spacing: 0.04em;

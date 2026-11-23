@@ -178,6 +178,11 @@ describe('MotionInputProvider', () => {
     );
     // Only one landmarker should be created for npc mode
     expect(createFromOptionsMock).toHaveBeenCalledTimes(1);
+    const landmarkerOptions = createFromOptionsMock.mock.calls[0]?.[1];
+    expect(landmarkerOptions?.baseOptions?.modelAssetPath).toContain('/mediapipe-models/');
+    expect(landmarkerOptions?.baseOptions?.modelAssetPath).toBe(
+      'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+    );
 
     // Advance video frames over > 0.5s to satisfy distance gate OK hold
     videoEl.currentTime = 0.25;
