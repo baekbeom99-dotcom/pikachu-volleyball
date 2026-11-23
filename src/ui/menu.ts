@@ -118,12 +118,10 @@ export class MenuUI {
     return this.screen;
   }
 
-  /** Updates the active screen and re-renders #ui-overlay. */
-  setScreen(screen: MenuScreen): void {
+  /** Updates the active screen ('MENU' or 'IN_GAME') and re-renders #ui-overlay. */
+  setScreen(screen: 'MENU' | 'IN_GAME'): void {
     this.screen = screen;
-    if (screen !== 'MATCH_OVER') {
-      this.matchOverSummary = null;
-    }
+    this.matchOverSummary = null;
     this.render();
   }
 

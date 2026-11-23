@@ -2,7 +2,7 @@ import './style.css';
 import { PopArtAudio } from './audio/sound';
 import { WORLD } from './core/constants';
 import { computeNpcInput } from './core/npc';
-import { createGameState, stepGame } from './core/rules';
+import { createGameState, resumeFromDistanceWait, stepGame } from './core/rules';
 import type { GameState, PlayerInput } from './core/types';
 import { KeyboardInputProvider } from './input/keyboard';
 import { MotionInputProvider } from './input/motion';
@@ -131,6 +131,7 @@ export function startApp(): () => void {
     keyboardProvider.setOpponentMode(selections.opponentMode);
 
     if (selections.controlMode === 'motion') {
+      touchProvider.reset();
       touchProvider.dispose();
       initMotionProvider(selections.opponentMode);
     } else {
@@ -202,14 +203,7 @@ export function startApp(): () => void {
       menuUI.setControlMode('touch');
 
       state.controlMode = 'touch';
-      if (state.phase === 'WAITING_DISTANCE') {
-        const resumePhase = state.pausedFromPhase ?? 'READY_SERVE';
-        state.pausedFromPhase = undefined;
-        state.phase = resumePhase;
-        if (resumePhase === 'READY_SERVE' && state.phaseTimer <= 0) {
-          state.phaseTimer = 0.7;
-        }
-      }
+      resumeFromDistanceWait(state);
       touchProvider.setOpponentMode(state.opponentMode);
       keyboardProvider.setOpponentMode(state.opponentMode);
       touchProvider.attach(canvasEl);

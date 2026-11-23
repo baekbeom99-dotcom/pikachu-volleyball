@@ -101,6 +101,20 @@ export function resetRound(state: GameState, serveSide: PlayerId): void {
   state.lastEvents = createEmptyEvents();
 }
 
+/** Resumes match progression out of WAITING_DISTANCE back to READY_SERVE or PLAYING. */
+export function resumeFromDistanceWait(state: GameState): void {
+  if (state.phase !== 'WAITING_DISTANCE') {
+    return;
+  }
+  const resumePhase =
+    state.pausedFromPhase ?? (state.phaseTimer > 0 ? 'READY_SERVE' : 'PLAYING');
+  state.pausedFromPhase = undefined;
+  state.phase = resumePhase;
+  if (resumePhase === 'READY_SERVE' && state.phaseTimer <= 0) {
+    state.phaseTimer = SERVE_READY_DURATION;
+  }
+}
+
 /** Advances the match rules state machine and physics by dt seconds. */
 export function stepGame(
   state: GameState,
@@ -132,13 +146,7 @@ export function stepGame(
         return state.lastEvents;
       }
     } else if (state.phase === 'WAITING_DISTANCE') {
-      const resumePhase =
-        state.pausedFromPhase ?? (state.phaseTimer > 0 ? 'READY_SERVE' : 'PLAYING');
-      state.pausedFromPhase = undefined;
-      state.phase = resumePhase;
-      if (resumePhase === 'READY_SERVE' && state.phaseTimer <= 0) {
-        state.phaseTimer = SERVE_READY_DURATION;
-      }
+      resumeFromDistanceWait(state);
     }
   }
 

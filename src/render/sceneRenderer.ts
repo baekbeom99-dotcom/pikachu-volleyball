@@ -209,9 +209,7 @@ export class PopArtSceneRenderer {
         this.drawMotionHalfGate(ctx, leftStatus, frameX + 6, frameY + 20, frameW * 0.5 - 12, frameH - 26);
         this.drawMotionHalfGate(ctx, rightStatus, midX + 6, frameY + 20, frameW * 0.5 - 12, frameH - 26);
       } else {
-        const explicitActiveSide = (
-          overlay.motionOverlay as MotionOverlayData & { activeSide?: 'left' | 'right' }
-        ).activeSide;
+        const explicitActiveSide = overlay.motionOverlay.activeSide;
         const rightActive =
           explicitActiveSide !== undefined
             ? explicitActiveSide === 'right'

@@ -589,7 +589,7 @@ export class MotionInputProvider implements InputProvider {
   }
 
   /** Returns a plain DTO summary for Pop-Art HUD rendering without exposing input classes. */
-  getOverlayData(): MotionOverlayData & { activeSide: Side } {
+  getOverlayData(): MotionOverlayData {
     return {
       statuses: this.getSideStatuses(),
       isReady: this.isMotionReady(),

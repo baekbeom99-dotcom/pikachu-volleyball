@@ -113,4 +113,5 @@ export interface MotionOverlayData {
   statuses: [MotionSideStatus, MotionSideStatus];
   isReady: boolean;
   error: string | null;
+  activeSide?: 'left' | 'right';
 }
