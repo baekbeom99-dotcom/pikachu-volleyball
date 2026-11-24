@@ -703,4 +703,45 @@ describe('stepPhysics', () => {
       expect(followEv.volleyBy).toBeNull();
     }
   });
+
+  it('keeps p1 facing right (1) and p2 facing left (-1) toward the net even when retreating or sliding away', () => {
+    const p1 = createInitialPlayer('p1');
+    const p2 = createInitialPlayer('p2');
+    p1.x = 260;
+    p2.x = 600;
+
+    // Retreating away from the net
+    const farBall = createInitialBall('p1');
+    farBall.y = 120;
+    stepPhysics(
+      [p1, p2],
+      farBall,
+      [
+        { moveX: -1, targetX: null, jump: false },
+        { moveX: 1, targetX: null, jump: false },
+      ],
+      WORLD.FIXED_DT,
+    );
+    expect(p1.facing).toBe(1);
+    expect(p2.facing).toBe(-1);
+
+    // Diving/sliding backward away from the net
+    const lowBackBall = createInitialBall('p1');
+    lowBackBall.x = 160;
+    lowBackBall.y = WORLD.FLOOR_Y - 110;
+    lowBackBall.vy = 260;
+    const ev = stepPhysics(
+      [p1, p2],
+      lowBackBall,
+      [
+        { moveX: -1, targetX: null, jump: false },
+        { moveX: 1, targetX: null, jump: false },
+      ],
+      WORLD.FIXED_DT,
+    );
+    expect(ev.slidBy).toBe('p1');
+    expect(p1.slideDir).toBe(-1);
+    expect(p1.facing).toBe(1);
+    expect(p2.facing).toBe(-1);
+  });
 });

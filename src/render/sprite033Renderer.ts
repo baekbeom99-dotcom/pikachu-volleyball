@@ -60,7 +60,7 @@ function resolveActionAndRow(
 
   switch (animState) {
     case 'idle':
-      return { actionKey: 'idle', row: SPRITE_033_ROWS.DOWN, forceLastFrame: false, loop: true };
+      return { actionKey: 'idle', row: dirRow, forceLastFrame: false, loop: true };
     case 'walk':
     case 'run':
     case 'air_float':
@@ -71,21 +71,21 @@ function resolveActionAndRow(
     case 'attack':
       return { actionKey: animState, row: dirRow, forceLastFrame: false, loop: false };
     case 'hurt':
-      return { actionKey: 'hurt', row: SPRITE_033_ROWS.DOWN, forceLastFrame: false, loop: false };
+      return { actionKey: 'hurt', row: dirRow, forceLastFrame: false, loop: false };
     case 'win': {
       const actionKey = manifest.actions.win ? 'win' : 'idle';
-      return { actionKey, row: SPRITE_033_ROWS.DOWN, forceLastFrame: false, loop: true };
+      return { actionKey, row: dirRow, forceLastFrame: false, loop: true };
     }
     case 'lose': {
       if (manifest.actions.lose) {
-        return { actionKey: 'lose', row: SPRITE_033_ROWS.DOWN, forceLastFrame: false, loop: false };
+        return { actionKey: 'lose', row: dirRow, forceLastFrame: false, loop: false };
       }
-      return { actionKey: 'hurt', row: SPRITE_033_ROWS.DOWN, forceLastFrame: true, loop: false };
+      return { actionKey: 'hurt', row: dirRow, forceLastFrame: true, loop: false };
     }
     default:
       return {
         actionKey: 'idle',
-        row: SPRITE_033_ROWS.DOWN,
+        row: dirRow,
         forceLastFrame: false,
         loop: LOOPING_STATES.has(animState),
       };

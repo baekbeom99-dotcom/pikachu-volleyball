@@ -139,7 +139,6 @@ function tryTriggerAutoSlide(
     player.slideTimer = WORLD.SLIDE_DURATION;
     player.slideCooldown = WORLD.SLIDE_COOLDOWN;
     player.slideDir = dir;
-    player.facing = dir;
     player.vx = dir * WORLD.SLIDE_SPEED;
     player.animLock = 'slide';
     player.animLockTimer = WORLD.SLIDE_DURATION;
@@ -183,11 +182,7 @@ function stepPlayer(
       ? player.slideDir * WORLD.SLIDE_SPEED
       : moveRatio * WORLD.PLAYER_MOVE_SPEED;
 
-  if (player.slideTimer > 0) {
-    player.facing = player.slideDir;
-  } else if (Math.abs(moveRatio) > 0.1) {
-    player.facing = moveRatio > 0 ? 1 : -1;
-  }
+  player.facing = player.id === 'p1' ? 1 : -1;
 
   tryTriggerAutoSlide(player, ball, moveRatio, events);
 

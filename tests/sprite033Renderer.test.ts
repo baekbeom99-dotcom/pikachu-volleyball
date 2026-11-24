@@ -59,27 +59,27 @@ describe('computeSpriteSlice', () => {
     expect(SPRITE_033_CELL_HEIGHT).toBe(250);
   });
 
-  it('maps idle to row 0 (DOWN) and loops across frames regardless of facing', () => {
+  it('maps idle to directional net-facing row (RIGHT=1 / LEFT=3) and loops across frames', () => {
     // idle: frames = 4, fps = 7
     const f0 = computeSpriteSlice('idle', 1, 0, realManifest);
     expect(f0).toEqual({
       actionKey: 'idle',
-      row: 0,
+      row: 1,
       frameIndex: 0,
       sx: 0,
-      sy: 0,
+      sy: 1 * 250,
       sw: 244,
       sh: 250,
     });
 
-    // At t = 5 / 7 -> frame 5 % 4 = 1, even when facing -1
+    // At t = 5 / 7 -> frame 5 % 4 = 1, facing -1 uses row 3 (LEFT)
     const f1 = computeSpriteSlice('idle', -1, 5 / 7 + 0.001, realManifest);
     expect(f1).toEqual({
       actionKey: 'idle',
-      row: 0,
+      row: 3,
       frameIndex: 1,
       sx: 244,
-      sy: 0,
+      sy: 3 * 250,
       sw: 244,
       sh: 250,
     });
@@ -88,6 +88,7 @@ describe('computeSpriteSlice', () => {
     const neg = computeSpriteSlice('idle', 1, -0.5, realManifest);
     expect(neg.frameIndex).toBe(0);
     expect(neg.sx).toBe(0);
+    expect(neg.row).toBe(1);
   });
 
   it('maps looping directional states (walk, run, air_float) to RIGHT (row 1) or LEFT (row 3)', () => {
@@ -164,32 +165,32 @@ describe('computeSpriteSlice', () => {
     expect(attackEnd.frameIndex).toBe(5);
   });
 
-  it('maps hurt to row 0 (DOWN) and clamps at last frame', () => {
+  it('maps hurt to directional row (RIGHT=1 / LEFT=3) and clamps at last frame', () => {
     // hurt: frames = 5, fps = 10
     const hurtMid = computeSpriteSlice('hurt', -1, 0.21, realManifest);
     expect(hurtMid).toEqual({
       actionKey: 'hurt',
-      row: 0,
+      row: 3,
       frameIndex: 2,
       sx: 2 * 244,
-      sy: 0,
+      sy: 3 * 250,
       sw: 244,
       sh: 250,
     });
 
     const hurtEnd = computeSpriteSlice('hurt', 1, 4.0, realManifest);
     expect(hurtEnd.frameIndex).toBe(4);
-    expect(hurtEnd.row).toBe(0);
+    expect(hurtEnd.row).toBe(1);
   });
 
-  it('falls back win -> idle row 0 and lose -> hurt last frame row 0 when absent from manifest', () => {
+  it('falls back win -> idle and lose -> hurt last frame using directional net-facing rows when absent from manifest', () => {
     const winFallback = computeSpriteSlice('win', -1, 2 / 7 + 0.001, realManifest);
     expect(winFallback).toEqual({
       actionKey: 'idle',
-      row: 0,
+      row: 3,
       frameIndex: 2,
       sx: 2 * 244,
-      sy: 0,
+      sy: 3 * 250,
       sw: 244,
       sh: 250,
     });
@@ -197,10 +198,10 @@ describe('computeSpriteSlice', () => {
     const loseFallback = computeSpriteSlice('lose', 1, 0, realManifest);
     expect(loseFallback).toEqual({
       actionKey: 'hurt',
-      row: 0,
+      row: 1,
       frameIndex: 4,
       sx: 4 * 244,
-      sy: 0,
+      sy: 1 * 250,
       sw: 244,
       sh: 250,
     });
@@ -219,10 +220,10 @@ describe('computeSpriteSlice', () => {
     const winSlice = computeSpriteSlice('win', 1, 4 / 6 + 0.001, extendedManifest);
     expect(winSlice).toEqual({
       actionKey: 'win',
-      row: 0,
+      row: 1,
       frameIndex: 1,
       sx: 244,
-      sy: 0,
+      sy: 1 * 250,
       sw: 244,
       sh: 250,
     });
@@ -230,10 +231,10 @@ describe('computeSpriteSlice', () => {
     const loseSlice = computeSpriteSlice('lose', -1, 2.0, extendedManifest);
     expect(loseSlice).toEqual({
       actionKey: 'lose',
-      row: 0,
+      row: 3,
       frameIndex: 3,
       sx: 3 * 244,
-      sy: 0,
+      sy: 3 * 250,
       sw: 244,
       sh: 250,
     });
@@ -379,7 +380,7 @@ describe('Sprite033Renderer', () => {
     expect((imgArg as { src: string }).src).toContain('idle_sheet.png');
     expect(sx).toBeLessThan(976);
     expect(sx).toBe((Math.floor(animTime * manifest.actions.idle.fps) % manifest.actions.idle.frames) * 244);
-    expect(sy).toBe(0);
+    expect(sy).toBe(3 * 250);
     expect(sw).toBe(244);
     expect(sh).toBe(250);
   });
