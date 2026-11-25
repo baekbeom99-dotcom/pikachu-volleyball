@@ -308,6 +308,47 @@ function createTrophySvg(): SVGSVGElement {
   }, 42);
 }
 
+function createHumanSvg(): SVGSVGElement {
+  return createPopIconSvg((ns, svg) => {
+    svg.append(
+      // Clean head + shoulders silhouette
+      svgEl(ns, 'circle', {
+        cx: 9.5,
+        cy: 8.5,
+        r: 3,
+        fill: '#ffe600',
+        stroke: '#111111',
+        'stroke-width': 2,
+      }),
+      svgEl(ns, 'path', {
+        d: 'M 4 20 C 4 15 15 15 15 20',
+        fill: '#ffe600',
+        stroke: '#111111',
+        'stroke-width': 2,
+        'stroke-linecap': 'round',
+      }),
+      // Raised palm / fingers gesture icon on right
+      svgEl(ns, 'path', {
+        d: 'M 18 12 V 6.5 M 16 12.5 V 7.5 M 20 12.5 V 8',
+        fill: 'none',
+        stroke: '#111111',
+        'stroke-width': 1.9,
+        'stroke-linecap': 'round',
+      }),
+      svgEl(ns, 'rect', {
+        x: 15,
+        y: 11.2,
+        width: 6,
+        height: 5.8,
+        rx: 2.4,
+        fill: '#ff2a85',
+        stroke: '#111111',
+        'stroke-width': 1.9,
+      }),
+    );
+  });
+}
+
 function createOptionGroup(
   labelText: string,
   buttons: HTMLButtonElement[],
@@ -349,6 +390,7 @@ export class MenuUI {
   private muted = false;
   private fullscreen = false;
   private showMotionGuide = false;
+  private showHumanGuide = false;
   private matchOverSummary: MatchOverSummary | null = null;
   private cameraError: string | null = null;
 
@@ -382,6 +424,7 @@ export class MenuUI {
   setScreen(screen: 'MENU' | 'IN_GAME'): void {
     this.screen = screen;
     this.showMotionGuide = false;
+    this.showHumanGuide = false;
     this.matchOverSummary = null;
     this.render();
   }
@@ -479,6 +522,8 @@ export class MenuUI {
       this.container.appendChild(this.buildStartMenu());
       if (this.showMotionGuide) {
         this.container.appendChild(this.buildMotionGuideModal());
+      } else if (this.showHumanGuide) {
+        this.container.appendChild(this.buildHumanGuideModal());
       }
     } else if (this.screen === 'IN_GAME') {
       this.container.appendChild(this.buildHudBar());
@@ -532,6 +577,7 @@ export class MenuUI {
         () => {
           this.selections.controlMode = 'touch';
           this.showMotionGuide = false;
+          this.showHumanGuide = false;
           this.render();
         },
         {
@@ -546,12 +592,28 @@ export class MenuUI {
         this.selections.controlMode === 'motion',
         () => {
           this.selections.controlMode = 'motion';
+          this.showHumanGuide = false;
           this.render();
         },
         {
           'data-control': 'motion',
           'aria-label': '모션인식 모드 (웹캠 좌/우 분할)',
           title: '모션인식 모드 (웹캠 좌/우 분할)',
+        },
+      ),
+      this.buildIconChoiceButton(
+        createHumanSvg(),
+        '사람',
+        this.selections.controlMode === 'human',
+        () => {
+          this.selections.controlMode = 'human';
+          this.showMotionGuide = false;
+          this.render();
+        },
+        {
+          'data-control': 'human',
+          'aria-label': '사람 모드 (내가 캐릭터 · 손 조작)',
+          title: '사람 모드 (내가 캐릭터 · 손 조작)',
         },
       ),
     ];
@@ -625,6 +687,17 @@ export class MenuUI {
         { 'data-action': 'open-motion-guide' },
       );
       actions.appendChild(guideBtn);
+    } else if (this.selections.controlMode === 'human') {
+      const guideBtn = createButton(
+        '사람 설명',
+        'pop-btn pop-btn--cyan pop-guide-btn',
+        () => {
+          this.showHumanGuide = true;
+          this.render();
+        },
+        { 'data-action': 'open-human-guide' },
+      );
+      actions.appendChild(guideBtn);
     }
 
     const startBtn = createButton(
@@ -681,6 +754,55 @@ export class MenuUI {
         this.render();
       },
       { 'data-action': 'close-motion-guide' },
+    );
+
+    card.append(badge, title, list, closeBtn);
+    backdrop.appendChild(card);
+    return backdrop;
+  }
+
+  private buildHumanGuideModal(): HTMLElement {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'pop-modal-backdrop';
+    stopPointerPropagation(backdrop);
+
+    const card = document.createElement('section');
+    card.className = 'pop-modal-card';
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-modal', 'true');
+    card.setAttribute('aria-label', 'Human Hand Mode Guide');
+    stopPointerPropagation(card);
+
+    const badge = document.createElement('span');
+    badge.className = 'pop-badge pop-badge--cyan';
+    badge.textContent = 'HUMAN + HAND';
+
+    const title = document.createElement('h2');
+    title.className = 'pop-guide-title';
+    title.textContent = '사람 모드 방법';
+
+    const list = document.createElement('ul');
+    list.className = 'pop-guide-list';
+    const items = [
+      '🧑 내가 캐릭터: 웹캠 배경을 지우고 아바타 대신 내 모습이 코트에 들어갑니다',
+      '✋ 손 좌우 이동: 카메라 앞에서 손을 좌우로 움직이면 캐릭터가 따라갑니다',
+      '🤌 점프 & 스파이크: 엄지·검지 모으기(핀치), 주먹 쥐기 또는 손 들어올리기',
+      '✌️ 2P 로컬 대전: 화면 좌/우 절반에서 각자 손 하나로 1:1 대결 가능',
+    ];
+    for (const text of items) {
+      const li = document.createElement('li');
+      li.textContent = text;
+      list.appendChild(li);
+    }
+
+    const closeBtn = createButton(
+      '확인',
+      'pop-btn pop-btn--magenta pop-start-btn',
+      () => {
+        this.showHumanGuide = false;
+        this.render();
+      },
+      { 'data-action': 'close-human-guide' },
     );
 
     card.append(badge, title, list, closeBtn);

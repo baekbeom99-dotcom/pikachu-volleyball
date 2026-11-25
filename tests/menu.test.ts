@@ -82,6 +82,7 @@ describe('MenuUI', () => {
     for (const sel of [
       '[data-control="touch"]',
       '[data-control="motion"]',
+      '[data-control="human"]',
       '[data-opponent="npc"]',
       '[data-opponent="2p"]',
       '[data-score="5"]',
@@ -96,6 +97,15 @@ describe('MenuUI', () => {
       targetScore: 15,
       usePlaceholderModel: false,
     });
+
+    container.querySelector<HTMLButtonElement>('[data-control="human"]')?.click();
+    const humanGuideBtn = container.querySelector<HTMLButtonElement>('[data-action="open-human-guide"]')!;
+    expect(humanGuideBtn).not.toBeNull();
+    humanGuideBtn.click();
+    expect(container.textContent).toContain('사람 모드 방법');
+    expect(container.textContent).toContain('점프 & 스파이크');
+    container.querySelector<HTMLButtonElement>('[data-action="close-human-guide"]')?.click();
+    expect(container.textContent).not.toContain('사람 모드 방법');
 
     container.querySelector<HTMLButtonElement>('[data-control="motion"]')?.click();
     const guideBtn = container.querySelector<HTMLButtonElement>('[data-action="open-motion-guide"]')!;

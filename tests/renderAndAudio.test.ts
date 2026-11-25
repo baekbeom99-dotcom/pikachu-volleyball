@@ -223,6 +223,42 @@ describe('PopArtSceneRenderer', () => {
     expect(zeroTexts).not.toContain('JUMP');
   });
 
+  it('renders human cutout in place of P1 avatar while keeping NPC sprite and hand HUD in human mode', () => {
+    const renderer = new PopArtSceneRenderer({ preloadSprites: false });
+    const state = createGameState({
+      controlMode: 'human',
+      opponentMode: 'npc',
+      initialPhase: 'READY_SERVE',
+    });
+    state.phase = 'PLAYING';
+    const fakeCutout = { width: 180, height: 220 } as unknown as HTMLCanvasElement;
+
+    const ctx = createMockCanvas2D();
+    renderer.render(ctx, state, {
+      joysticks: [],
+      canvasCssWidth: WORLD.WIDTH,
+      canvasCssHeight: WORLD.HEIGHT,
+      motionOverlay: null,
+      motionPreviewCanvas: null,
+      humanOverlay: {
+        isReady: true,
+        error: null,
+        cutouts: [fakeCutout, null],
+        hands: [{ side: 'left', detected: true, normX: 0.4, normY: 0.5, jumpActive: true }],
+      },
+      showPlaceholders: true,
+    });
+
+    expect(ctx.drawImage).toHaveBeenCalled();
+    const drawImageFirstArg = (ctx.drawImage as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(drawImageFirstArg).toBe(fakeCutout);
+
+    const texts = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    expect(texts).toContain('P1');
+    expect(texts).toContain('P2');
+    expect(texts).toContain('JUMP');
+  });
+
   it('renders split camera halves centered in each court without STEP BACK warnings', () => {
     const renderer = new PopArtSceneRenderer({ preloadSprites: false });
     const state = createGameState({

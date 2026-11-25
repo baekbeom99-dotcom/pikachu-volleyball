@@ -2,6 +2,7 @@ import { WORLD } from '../core/constants';
 import type {
   BallState,
   GameState,
+  HumanOverlayData,
   MotionOverlayData,
   MotionSideStatus,
   PlayerState,
@@ -9,6 +10,9 @@ import type {
 } from '../core/types';
 import {
   PlaceholderCharacterRenderer,
+  computeSquashPose,
+  drawFloorShadow,
+  drawPlayerBadge,
   type CharacterRenderData,
   type CharacterRenderer,
 } from './characterRenderer';
@@ -29,6 +33,7 @@ export interface SceneOverlayContext {
   canvasCssHeight: number;
   motionOverlay: MotionOverlayData | null;
   motionPreviewCanvas: HTMLCanvasElement | null;
+  humanOverlay?: HumanOverlayData | null;
   showPlaceholders?: boolean;
 }
 
@@ -112,7 +117,31 @@ export class PopArtSceneRenderer {
       : this.characterRenderer;
 
     for (const player of state.players) {
-      activeRenderer.render(ctx, toCharacterRenderData(player));
+      const isHumanSlot =
+        state.controlMode === 'human' &&
+        (player.id === 'p1' || state.opponentMode === '2p');
+      if (isHumanSlot) {
+        const cutout =
+          player.id === 'p1'
+            ? (overlay.humanOverlay?.cutouts[0] ?? null)
+            : (overlay.humanOverlay?.cutouts[1] ?? null);
+        if (cutout) {
+          this.drawHumanPlayer(ctx, player, cutout);
+        } else {
+          activeRenderer.render(ctx, toCharacterRenderData(player));
+          if (overlay.humanOverlay && !overlay.humanOverlay.isReady && !overlay.humanOverlay.error) {
+            drawPopText(ctx, 'CAM LOADING...', player.x, player.y - player.radius - 68, {
+              font: `900 12px ${POP_DISPLAY_FONT}`,
+              fill: POP_PALETTE.YELLOW,
+              strokeWidth: 3,
+              shadowOffsetX: 1,
+              shadowOffsetY: 1,
+            });
+          }
+        }
+      } else {
+        activeRenderer.render(ctx, toCharacterRenderData(player));
+      }
     }
 
     this.drawBall(ctx, state.ball);
@@ -120,12 +149,131 @@ export class PopArtSceneRenderer {
 
     if (state.controlMode === 'touch') {
       this.drawDynamicJoysticks(ctx, overlay);
+    } else if (state.controlMode === 'human' && overlay.humanOverlay) {
+      this.drawHumanHandTrackerHud(ctx, state, overlay.humanOverlay);
     }
 
     this.drawScoreboardHud(ctx, state);
     this.drawPhaseOverlay(ctx, state);
 
     ctx.restore();
+  }
+
+  private drawHumanPlayer(
+    ctx: CanvasRenderingContext2D,
+    player: PlayerState,
+    cutoutCanvas: HTMLCanvasElement,
+  ): void {
+    const isP1 = player.id === 'p1';
+    const ringColor = isP1 ? POP_PALETTE.YELLOW : POP_PALETTE.MAGENTA;
+
+    drawFloorShadow(ctx, player.x, player.y, player.radius, 1.08);
+
+    const heightAboveFloor = Math.max(0, WORLD.FLOOR_Y - (player.y + player.radius));
+    const ringScale = Math.max(0.55, 1 - heightAboveFloor / 320);
+
+    ctx.save();
+    ctx.strokeStyle = POP_PALETTE.INK;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.ellipse(
+      player.x,
+      WORLD.FLOOR_Y + 1,
+      player.radius * 1.12 * ringScale,
+      10 * ringScale,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.stroke();
+
+    ctx.strokeStyle = ringColor;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.restore();
+
+    const targetH = 132;
+    const aspect =
+      cutoutCanvas.height > 0 ? cutoutCanvas.width / cutoutCanvas.height : 180 / 220;
+    const drawW = targetH * aspect;
+    const drawH = targetH;
+    const footY = player.y + player.radius + 6;
+    const pose = computeSquashPose(player.animState, player.animTime, player.facing);
+
+    ctx.save();
+    ctx.translate(player.x, footY + pose.offsetY);
+    ctx.rotate(pose.tiltRad * 0.5);
+    ctx.scale(pose.scaleX, pose.scaleY);
+    ctx.drawImage(cutoutCanvas, -drawW * 0.5, -drawH, drawW, drawH);
+    ctx.restore();
+
+    drawPlayerBadge(ctx, player.id, player.x, footY - drawH - 2);
+  }
+
+  private drawHumanHandTrackerHud(
+    ctx: CanvasRenderingContext2D,
+    state: GameState,
+    humanOverlay: HumanOverlayData,
+  ): void {
+    if (state.phase === 'MENU' || state.phase === 'MATCH_OVER') {
+      return;
+    }
+
+    const padW = 92;
+    const padH = 54;
+    const padY = 98;
+
+    for (const hand of humanOverlay.hands) {
+      const isLeft = hand.side === 'left';
+      const padX = isLeft ? 16 : WORLD.WIDTH - 16 - padW;
+      const accent = isLeft ? POP_PALETTE.YELLOW : POP_PALETTE.MAGENTA;
+
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      drawPopPanel(ctx, padX, padY, padW, padH, POP_PALETTE.CREAM, 3, 3);
+
+      if (!humanOverlay.isReady) {
+        drawPopText(ctx, 'CAM...', padX + padW * 0.5, padY + padH * 0.5, {
+          font: `900 11px ${POP_DISPLAY_FONT}`,
+          fill: POP_PALETTE.INK,
+          strokeWidth: 0,
+          shadowOffsetX: 0,
+          shadowOffsetY: 0,
+        });
+      } else if (!hand.detected) {
+        drawPopText(ctx, 'HAND?', padX + padW * 0.5, padY + padH * 0.5, {
+          font: `900 12px ${POP_DISPLAY_FONT}`,
+          fill: POP_PALETTE.MAGENTA,
+          strokeWidth: 0,
+          shadowOffsetX: 0,
+          shadowOffsetY: 0,
+        });
+      } else {
+        const innerPad = 10;
+        const dotX = padX + innerPad + hand.normX * (padW - innerPad * 2);
+        const dotY = padY + innerPad + hand.normY * (padH - innerPad * 2);
+        const dotR = hand.jumpActive ? 9 : 6.5;
+
+        ctx.fillStyle = hand.jumpActive ? POP_PALETTE.MAGENTA : accent;
+        ctx.strokeStyle = POP_PALETTE.INK;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        if (hand.jumpActive) {
+          drawPopText(ctx, 'JUMP', padX + padW * 0.5, padY + padH - 8, {
+            font: `900 9px ${POP_DISPLAY_FONT}`,
+            fill: POP_PALETTE.MAGENTA,
+            strokeWidth: 0,
+            shadowOffsetX: 0,
+            shadowOffsetY: 0,
+          });
+        }
+      }
+      ctx.restore();
+    }
   }
 
   private drawMotionCameraPanel(

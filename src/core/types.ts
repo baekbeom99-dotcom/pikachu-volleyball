@@ -1,6 +1,6 @@
 export type PlayerId = 'p1' | 'p2';
 
-export type ControlMode = 'touch' | 'motion';
+export type ControlMode = 'touch' | 'motion' | 'human';
 
 export type OpponentMode = 'npc' | '2p';
 
@@ -115,4 +115,20 @@ export interface MotionOverlayData {
   isReady: boolean;
   error: string | null;
   activeSide?: 'left' | 'right';
+}
+
+export interface HandOverlayPoint {
+  side: 'left' | 'right';
+  detected: boolean;
+  normX: number;
+  normY: number;
+  jumpActive: boolean;
+}
+
+export interface HumanOverlayData {
+  isReady: boolean;
+  error: string | null;
+  /** Segmented person cutouts (transparent background) for P1 and P2. */
+  cutouts: [HTMLCanvasElement | null, HTMLCanvasElement | null];
+  hands: HandOverlayPoint[];
 }
