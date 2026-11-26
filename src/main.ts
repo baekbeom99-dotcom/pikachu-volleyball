@@ -5,6 +5,7 @@ import { computeNpcInput } from './core/npc';
 import { createGameState, resumeFromDistanceWait, stepGame } from './core/rules';
 import type { GameState, PlayerInput } from './core/types';
 import { KeyboardInputProvider } from './input/keyboard';
+import { HandMotionInputProvider } from './input/handMotion';
 import { HumanInputProvider } from './input/human';
 import { MotionInputProvider } from './input/motion';
 import { TouchJoystickProvider } from './input/touchJoystick';
@@ -95,6 +96,7 @@ export function startApp(): () => void {
   const touchProvider = new TouchJoystickProvider('npc');
   const keyboardProvider = new KeyboardInputProvider('npc');
   let motionProvider: MotionInputProvider | null = null;
+  let handMotionProvider: HandMotionInputProvider | null = null;
   let humanProvider: HumanInputProvider | null = null;
 
   let usePlaceholderModel = false;
@@ -111,6 +113,10 @@ export function startApp(): () => void {
       motionProvider.dispose();
       motionProvider = null;
     }
+    if (handMotionProvider) {
+      handMotionProvider.dispose();
+      handMotionProvider = null;
+    }
     if (humanProvider) {
       humanProvider.dispose();
       humanProvider = null;
@@ -125,6 +131,15 @@ export function startApp(): () => void {
       opponentMode,
     });
     void motionProvider.init();
+  };
+
+  const initHandMotionProvider = (opponentMode: GameState['opponentMode']): void => {
+    disposeCameraProviders();
+    handMotionProvider = new HandMotionInputProvider({
+      videoEl,
+      opponentMode,
+    });
+    void handMotionProvider.init();
   };
 
   const initHumanProvider = (opponentMode: GameState['opponentMode']): void => {
@@ -149,6 +164,10 @@ export function startApp(): () => void {
       touchProvider.reset();
       touchProvider.dispose();
       initMotionProvider(selections.opponentMode);
+    } else if (selections.controlMode === 'hand') {
+      touchProvider.reset();
+      touchProvider.dispose();
+      initHandMotionProvider(selections.opponentMode);
     } else if (selections.controlMode === 'human') {
       touchProvider.reset();
       touchProvider.dispose();
@@ -181,6 +200,8 @@ export function startApp(): () => void {
         touchProvider.attach(canvasEl);
       } else if (state.controlMode === 'motion' && !motionProvider) {
         initMotionProvider(state.opponentMode);
+      } else if (state.controlMode === 'hand' && !handMotionProvider) {
+        initHandMotionProvider(state.opponentMode);
       } else if (state.controlMode === 'human' && !humanProvider) {
         initHumanProvider(state.opponentMode);
       }
@@ -243,6 +264,8 @@ export function startApp(): () => void {
       menuUI.clearCameraError();
       if (state.controlMode === 'motion') {
         initMotionProvider(state.opponentMode);
+      } else if (state.controlMode === 'hand') {
+        initHandMotionProvider(state.opponentMode);
       } else if (state.controlMode === 'human') {
         initHumanProvider(state.opponentMode);
       }
@@ -349,13 +372,24 @@ export function startApp(): () => void {
         const [keyP1, keyP2] = keyboardProvider.getInputs(dt);
         p1Input = combineInputs(touchP1, keyP1);
         p2Input = combineInputs(touchP2, keyP2);
+      } else if (state.controlMode === 'hand') {
+        if (handMotionProvider) {
+          const [handP1, handP2] = handMotionProvider.getInputs(dt);
+          p1Input = handP1;
+          p2Input = handP2;
+          motionReady = handMotionProvider.isReady();
+        } else {
+          motionReady = false;
+        }
       } else if (state.controlMode === 'human') {
         if (humanProvider) {
           const [humanP1, humanP2] = humanProvider.getInputs(dt);
           p1Input = humanP1;
           p2Input = humanP2;
+          motionReady = humanProvider.isHumanReady();
+        } else {
+          motionReady = false;
         }
-        motionReady = true;
       } else if (motionProvider) {
         const [motionP1, motionP2] = motionProvider.getInputs(dt);
         p1Input = motionP1;
@@ -383,6 +417,12 @@ export function startApp(): () => void {
       if (motionError !== null && motionError !== lastSurfacedMotionError) {
         lastSurfacedMotionError = motionError;
         menuUI.showCameraError(motionError);
+      }
+    } else if (state.controlMode === 'hand' && handMotionProvider) {
+      const handError = handMotionProvider.getError();
+      if (handError !== null && handError !== lastSurfacedMotionError) {
+        lastSurfacedMotionError = handError;
+        menuUI.showCameraError(handError);
       }
     } else if (state.controlMode === 'human' && humanProvider) {
       const humanError = humanProvider.getError();
@@ -417,6 +457,14 @@ export function startApp(): () => void {
       motionPreviewCanvas:
         state.controlMode === 'motion' && motionProvider
           ? motionProvider.getPreviewCanvas()
+          : null,
+      handMotionOverlay:
+        state.controlMode === 'hand' && handMotionProvider
+          ? handMotionProvider.getOverlayData()
+          : null,
+      handPreviewCanvas:
+        state.controlMode === 'hand' && handMotionProvider
+          ? handMotionProvider.getPreviewCanvas()
           : null,
       humanOverlay:
         state.controlMode === 'human' && humanProvider

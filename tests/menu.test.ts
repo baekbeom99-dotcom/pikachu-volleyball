@@ -81,8 +81,9 @@ describe('MenuUI', () => {
     expect(container.querySelector('[data-action="open-motion-guide"]')).toBeNull();
     for (const sel of [
       '[data-control="touch"]',
-      '[data-control="motion"]',
       '[data-control="human"]',
+      '[data-control="motion"]',
+      '[data-control="hand"]',
       '[data-opponent="npc"]',
       '[data-opponent="2p"]',
       '[data-score="5"]',
@@ -91,6 +92,17 @@ describe('MenuUI', () => {
     ]) {
       expect(container.querySelector(`${sel} svg`)).not.toBeNull();
     }
+
+    const modeLabels = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-control] .pop-choice-tile-label'),
+    ).map((el) => el.textContent);
+    expect(modeLabels).toEqual(['터치', '사람', '모션', '손 모션']);
+
+    const sectionLabels = Array.from(
+      container.querySelectorAll<HTMLElement>('.pop-menu-sections .pop-option-label'),
+    ).map((el) => el.textContent);
+    expect(sectionLabels).toEqual(['MODE', 'PLAYERS', 'SCORE']);
+
     expect(ui.getSelections()).toEqual({
       controlMode: 'touch',
       opponentMode: 'npc',
@@ -98,12 +110,23 @@ describe('MenuUI', () => {
       usePlaceholderModel: false,
     });
 
+    container.querySelector<HTMLButtonElement>('[data-control="hand"]')?.click();
+    const handGuideBtn = container.querySelector<HTMLButtonElement>('[data-action="open-hand-guide"]')!;
+    expect(handGuideBtn).not.toBeNull();
+    expect(handGuideBtn.textContent).toBe('손 모션 설명');
+    handGuideBtn.click();
+    expect(container.textContent).toContain('손 모션 방법');
+    expect(container.textContent).toContain('에어 조이스틱');
+    expect(container.textContent).toContain('내 코트 위 캠 화면');
+    container.querySelector<HTMLButtonElement>('[data-action="close-hand-guide"]')?.click();
+    expect(container.textContent).not.toContain('손 모션 방법');
+
     container.querySelector<HTMLButtonElement>('[data-control="human"]')?.click();
     const humanGuideBtn = container.querySelector<HTMLButtonElement>('[data-action="open-human-guide"]')!;
     expect(humanGuideBtn).not.toBeNull();
     humanGuideBtn.click();
     expect(container.textContent).toContain('사람 모드 방법');
-    expect(container.textContent).toContain('점프 & 스파이크');
+    expect(container.textContent).toContain('1:1 내가 코트에');
     container.querySelector<HTMLButtonElement>('[data-action="close-human-guide"]')?.click();
     expect(container.textContent).not.toContain('사람 모드 방법');
 

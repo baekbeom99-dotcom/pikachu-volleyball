@@ -311,7 +311,6 @@ function createTrophySvg(): SVGSVGElement {
 function createHumanSvg(): SVGSVGElement {
   return createPopIconSvg((ns, svg) => {
     svg.append(
-      // Clean head + shoulders silhouette
       svgEl(ns, 'circle', {
         cx: 9.5,
         cy: 8.5,
@@ -327,7 +326,6 @@ function createHumanSvg(): SVGSVGElement {
         'stroke-width': 2,
         'stroke-linecap': 'round',
       }),
-      // Raised palm / fingers gesture icon on right
       svgEl(ns, 'path', {
         d: 'M 18 12 V 6.5 M 16 12.5 V 7.5 M 20 12.5 V 8',
         fill: 'none',
@@ -344,6 +342,28 @@ function createHumanSvg(): SVGSVGElement {
         fill: '#ff2a85',
         stroke: '#111111',
         'stroke-width': 1.9,
+      }),
+    );
+  });
+}
+
+function createHandModeSvg(): SVGSVGElement {
+  return createPopIconSvg((ns, svg) => {
+    svg.append(
+      // Clean raised open palm silhouette (5 fingers + palm) for Hand Motion mode
+      svgEl(ns, 'path', {
+        d: 'M 8.5 12 V 6.2 M 11.5 11.2 V 4.8 M 14.5 11.5 V 5.8 M 17.2 13 V 8.2',
+        fill: 'none',
+        stroke: '#111111',
+        'stroke-width': 2.1,
+        'stroke-linecap': 'round',
+      }),
+      svgEl(ns, 'path', {
+        d: 'M 7 13.5 L 5.4 12 C 4.6 11.2 4.6 10 5.4 9.5 C 6.2 9 7.2 9.5 7.8 10.4 L 8.5 11.4 H 17.2 V 14.8 C 17.2 18 15 20 12.2 20 C 9.4 20 7.6 18 7 15.2 Z',
+        fill: '#ffb703',
+        stroke: '#111111',
+        'stroke-width': 2,
+        'stroke-linejoin': 'round',
       }),
     );
   });
@@ -390,6 +410,7 @@ export class MenuUI {
   private muted = false;
   private fullscreen = false;
   private showMotionGuide = false;
+  private showHandGuide = false;
   private showHumanGuide = false;
   private matchOverSummary: MatchOverSummary | null = null;
   private cameraError: string | null = null;
@@ -424,6 +445,7 @@ export class MenuUI {
   setScreen(screen: 'MENU' | 'IN_GAME'): void {
     this.screen = screen;
     this.showMotionGuide = false;
+    this.showHandGuide = false;
     this.showHumanGuide = false;
     this.matchOverSummary = null;
     this.render();
@@ -522,6 +544,8 @@ export class MenuUI {
       this.container.appendChild(this.buildStartMenu());
       if (this.showMotionGuide) {
         this.container.appendChild(this.buildMotionGuideModal());
+      } else if (this.showHandGuide) {
+        this.container.appendChild(this.buildHandGuideModal());
       } else if (this.showHumanGuide) {
         this.container.appendChild(this.buildHumanGuideModal());
       }
@@ -577,6 +601,7 @@ export class MenuUI {
         () => {
           this.selections.controlMode = 'touch';
           this.showMotionGuide = false;
+          this.showHandGuide = false;
           this.showHumanGuide = false;
           this.render();
         },
@@ -587,11 +612,28 @@ export class MenuUI {
         },
       ),
       this.buildIconChoiceButton(
+        createHumanSvg(),
+        '사람',
+        this.selections.controlMode === 'human',
+        () => {
+          this.selections.controlMode = 'human';
+          this.showMotionGuide = false;
+          this.showHandGuide = false;
+          this.render();
+        },
+        {
+          'data-control': 'human',
+          'aria-label': '사람 모드 (1:1 AR · 손 직접 타격)',
+          title: '사람 모드 (1:1 AR · 손 직접 타격)',
+        },
+      ),
+      this.buildIconChoiceButton(
         createMotionSvg(),
         '모션',
         this.selections.controlMode === 'motion',
         () => {
           this.selections.controlMode = 'motion';
+          this.showHandGuide = false;
           this.showHumanGuide = false;
           this.render();
         },
@@ -602,18 +644,19 @@ export class MenuUI {
         },
       ),
       this.buildIconChoiceButton(
-        createHumanSvg(),
-        '사람',
-        this.selections.controlMode === 'human',
+        createHandModeSvg(),
+        '손 모션',
+        this.selections.controlMode === 'hand',
         () => {
-          this.selections.controlMode = 'human';
+          this.selections.controlMode = 'hand';
           this.showMotionGuide = false;
+          this.showHumanGuide = false;
           this.render();
         },
         {
-          'data-control': 'human',
-          'aria-label': '사람 모드 (내가 캐릭터 · 손 조작)',
-          title: '사람 모드 (내가 캐릭터 · 손 조작)',
+          'data-control': 'hand',
+          'aria-label': '손 모션 모드 (한 손 움직임 방향으로 아바타 이동 · 점프)',
+          title: '손 모션 모드 (한 손 움직임 방향으로 아바타 이동 · 점프)',
         },
       ),
     ];
@@ -685,6 +728,17 @@ export class MenuUI {
           this.render();
         },
         { 'data-action': 'open-motion-guide' },
+      );
+      actions.appendChild(guideBtn);
+    } else if (this.selections.controlMode === 'hand') {
+      const guideBtn = createButton(
+        '손 모션 설명',
+        'pop-btn pop-btn--cyan pop-guide-btn',
+        () => {
+          this.showHandGuide = true;
+          this.render();
+        },
+        { 'data-action': 'open-hand-guide' },
       );
       actions.appendChild(guideBtn);
     } else if (this.selections.controlMode === 'human') {
@@ -770,12 +824,12 @@ export class MenuUI {
     card.className = 'pop-modal-card';
     card.setAttribute('role', 'dialog');
     card.setAttribute('aria-modal', 'true');
-    card.setAttribute('aria-label', 'Human Hand Mode Guide');
+    card.setAttribute('aria-label', 'Human AR Hand Mode Guide');
     stopPointerPropagation(card);
 
     const badge = document.createElement('span');
     badge.className = 'pop-badge pop-badge--cyan';
-    badge.textContent = 'HUMAN + HAND';
+    badge.textContent = '1:1 AR HUMAN';
 
     const title = document.createElement('h2');
     title.className = 'pop-guide-title';
@@ -784,10 +838,10 @@ export class MenuUI {
     const list = document.createElement('ul');
     list.className = 'pop-guide-list';
     const items = [
-      '🧑 내가 캐릭터: 웹캠 배경을 지우고 아바타 대신 내 모습이 코트에 들어갑니다',
-      '✋ 손 좌우 이동: 카메라 앞에서 손을 좌우로 움직이면 캐릭터가 따라갑니다',
-      '🤌 점프 & 스파이크: 엄지·검지 모으기(핀치), 주먹 쥐기 또는 손 들어올리기',
-      '✌️ 2P 로컬 대전: 화면 좌/우 절반에서 각자 손 하나로 1:1 대결 가능',
+      '🧑 1:1 내가 코트에: 아바타 축소 없이 내 실제 모습이 그대로 코트 안에 들어갑니다',
+      '✊ 주먹으로 타격(1초): 손을 펴면 통과! 주먹을 쥐고 1초 안에 쳐야 하며 초과 시 폈다 쥐세요',
+      '⚡ 스파이크: 높은 타격 타이밍에 공 위쪽을 네트 방향으로 움직이며 치면 강스파이크!',
+      '✌️ 1P / 2P: 1P는 피카츄 NPC와 대결, 2P는 좌/우 절반에서 각자 손으로 대결',
     ];
     for (const text of items) {
       const li = document.createElement('li');
@@ -803,6 +857,55 @@ export class MenuUI {
         this.render();
       },
       { 'data-action': 'close-human-guide' },
+    );
+
+    card.append(badge, title, list, closeBtn);
+    backdrop.appendChild(card);
+    return backdrop;
+  }
+
+  private buildHandGuideModal(): HTMLElement {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'pop-modal-backdrop';
+    stopPointerPropagation(backdrop);
+
+    const card = document.createElement('section');
+    card.className = 'pop-modal-card';
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-modal', 'true');
+    card.setAttribute('aria-label', 'Hand Motion Mode Guide');
+    stopPointerPropagation(card);
+
+    const badge = document.createElement('span');
+    badge.className = 'pop-badge pop-badge--cyan';
+    badge.textContent = 'HAND MOTION';
+
+    const title = document.createElement('h2');
+    title.className = 'pop-guide-title';
+    title.textContent = '손 모션 방법';
+
+    const list = document.createElement('ul');
+    list.className = 'pop-guide-list';
+    const items = [
+      '🕹️ 에어 조이스틱: 손을 처음 든 위치를 기준으로 살짝(약 5cm) 좌우로 두면 그 방향으로 계속 이동',
+      '↩️ 빠른 방향 전환: 반대쪽으로 살짝만 당겨도 기준점이 따라와 즉시 정지/반전됩니다',
+      '⬆️ 손 올리기 점프: 좌우 흔들림과 구분해 손을 위로 명확히 들어 올리면 점프!',
+      '🧭 캠 & 방향 표시: 내 코트 위 캠 화면(2P는 분할)과 발밑 게이지(◀ ● ▶)로 바로 확인',
+    ];
+    for (const text of items) {
+      const li = document.createElement('li');
+      li.textContent = text;
+      list.appendChild(li);
+    }
+
+    const closeBtn = createButton(
+      '확인',
+      'pop-btn pop-btn--magenta pop-start-btn',
+      () => {
+        this.showHandGuide = false;
+        this.render();
+      },
+      { 'data-action': 'close-hand-guide' },
     );
 
     card.append(badge, title, list, closeBtn);

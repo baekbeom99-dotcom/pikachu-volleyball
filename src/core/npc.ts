@@ -6,20 +6,26 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /** Simulates a copy of the ball forward to predict its landing X coordinate. */
-export function predictBallLandingX(ball: BallState, maxSteps = 120): number {
+export function predictBallLandingX(
+  ball: BallState,
+  maxSteps = 120,
+  gravity: number = WORLD.BALL_GRAVITY,
+  timeScale = 1,
+): number {
   let x = ball.x;
   let y = ball.y;
   let vx = ball.vx;
   let vy = ball.vy;
   const radius = ball.radius;
-  const dt = WORLD.FIXED_DT;
+  const safeScale = Number.isFinite(timeScale) && timeScale > 0 ? timeScale : 1;
+  const dt = WORLD.FIXED_DT * safeScale;
 
   if (y + radius >= WORLD.FLOOR_Y) {
     return x;
   }
 
   for (let step = 0; step < maxSteps; step++) {
-    vy += WORLD.BALL_GRAVITY * dt;
+    vy += gravity * dt;
     const speed = Math.hypot(vx, vy);
     if (speed > WORLD.BALL_MAX_SPEED) {
       const scale = WORLD.BALL_MAX_SPEED / speed;
@@ -129,7 +135,13 @@ export function computeNpcInput(
     };
   }
 
-  const predictedX = predictBallLandingX(ball);
+  const ballGravity =
+    state.controlMode === 'human' ? WORLD.HUMAN_BALL_GRAVITY : WORLD.BALL_GRAVITY;
+  const ballTimeScale =
+    state.controlMode === 'motion' || state.controlMode === 'hand'
+      ? WORLD.MOTION_BALL_SPEED_SCALE
+      : 1;
+  const predictedX = predictBallLandingX(ball, 120, ballGravity, ballTimeScale);
   const isPredictedOnNpcSide = isP2
     ? predictedX >= WORLD.NET_X
     : predictedX <= WORLD.NET_X;

@@ -194,14 +194,14 @@ body {
 /* --- Start Menu --- */
 .pop-menu-card {
   position: relative;
-  width: min(676px, 100%);
+  width: min(740px, calc(100% - 20px));
   max-height: calc(100% - 8px);
   overflow-y: auto;
   overscroll-behavior: contain;
   background: var(--pop-cream);
   border: var(--pop-border);
   box-shadow: var(--pop-shadow-lg);
-  padding: 20px 24px;
+  padding: 22px 28px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -230,21 +230,22 @@ body {
   margin: 0;
   font-family: var(--pop-title-font);
   font-weight: 900;
-  font-size: clamp(1.7rem, 3.8vw, 2.35rem);
+  font-size: clamp(2rem, 4.2vw, 2.75rem);
   line-height: 1.02;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--pop-yellow);
   paint-order: stroke fill;
-  -webkit-text-stroke: 5.5px var(--pop-ink);
+  -webkit-text-stroke: 6px var(--pop-ink);
   text-shadow: 5px 5px 0 var(--pop-ink);
 }
 
 .pop-menu-sections {
   display: grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: 1fr;
   justify-content: center;
-  gap: 14px 24px;
+  align-items: start;
+  gap: 14px;
   justify-items: center;
 }
 
@@ -255,12 +256,8 @@ body {
   gap: 6px;
 }
 
-.pop-option-group:nth-child(3) {
-  grid-column: 1 / -1;
-}
-
 .pop-option-label {
-  font-size: 0.85rem;
+  font-size: 0.96rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--pop-ink);
@@ -268,54 +265,57 @@ body {
 
 .pop-option-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
-  gap: 10px;
+  gap: 14px;
 }
 
 .pop-choice-btn {
   flex: 0 0 auto;
   padding: 8px;
-  font-size: 0.92rem;
+  font-size: 1rem;
   text-transform: none;
   background: var(--pop-white);
   box-shadow: var(--pop-shadow-sm);
 }
 
 .pop-choice-tile {
-  width: 110px;
-  height: 110px;
+  width: 104px;
+  height: 104px;
   aspect-ratio: 1 / 1;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 6px;
   padding: 8px 6px;
 }
 
 .pop-choice-icon {
   display: block;
   flex-shrink: 0;
+  width: 44px;
+  height: 44px;
 }
 
 .pop-choice-tile-label {
-  font-size: 1.05rem;
+  font-size: 1.12rem;
   line-height: 1;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .pop-menu-actions {
   display: flex;
   align-items: stretch;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
 }
 
 .pop-guide-btn {
   flex: 0 0 auto;
-  padding: 12px 16px;
-  font-size: 1rem;
+  padding: 14px 20px;
+  font-size: 1.1rem;
   white-space: nowrap;
 }
 
@@ -364,6 +364,11 @@ body {
 
 .pop-choice-btn.is-selected[data-control='human'] {
   background: var(--pop-cyan);
+  color: var(--pop-ink);
+}
+
+.pop-choice-btn.is-selected[data-control='hand'] {
+  background: #ffb703;
   color: var(--pop-ink);
 }
 
@@ -543,10 +548,31 @@ body {
   }
 }
 
+@media (max-height: 660px) and (min-height: 521px) {
+  .pop-menu-card {
+    padding: 16px 22px;
+    gap: 10px;
+  }
+
+  .pop-choice-tile {
+    width: 88px;
+    height: 88px;
+  }
+
+  .pop-choice-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .pop-choice-tile-label {
+    font-size: 0.96rem;
+  }
+}
+
 @media (max-height: 520px) {
   .pop-menu-card {
-    width: min(560px, 100%);
-    padding: 7px 8px;
+    width: min(492px, calc(100% - 8px));
+    padding: 8px 12px;
     gap: 5px;
   }
 
@@ -558,58 +584,56 @@ body {
   }
 
   .pop-menu-title {
-    font-size: 1.35rem;
-    -webkit-text-stroke: 3.5px var(--pop-ink);
+    font-size: 1.4rem;
+    -webkit-text-stroke: 3.8px var(--pop-ink);
     text-shadow: 3px 3px 0 var(--pop-ink);
   }
 
   .pop-menu-sections {
-    grid-template-columns: auto auto auto;
+    grid-template-columns: 1fr;
     justify-content: center;
-    gap: 4px 8px;
-  }
-
-  .pop-option-group:nth-child(3) {
-    grid-column: auto;
+    align-items: start;
+    gap: 4px;
   }
 
   .pop-option-group {
-    gap: 3px;
+    gap: 2px;
   }
 
   .pop-option-row {
-    gap: 4px;
+    gap: 8px;
     flex-wrap: nowrap;
   }
 
   .pop-option-label {
-    font-size: 0.7rem;
+    font-size: 0.72rem;
   }
 
   .pop-choice-tile {
-    width: 54px;
-    height: 54px;
-    padding: 3px;
+    width: 64px;
+    height: 64px;
+    padding: 4px 2px;
     gap: 2px;
   }
 
   .pop-choice-icon {
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
   }
 
   .pop-choice-tile-label {
-    font-size: 0.72rem;
+    font-size: 0.74rem;
+    letter-spacing: 0;
   }
 
   .pop-guide-btn {
-    padding: 8px 12px;
-    font-size: 0.88rem;
+    padding: 8px 14px;
+    font-size: 0.9rem;
   }
 
   .pop-start-btn {
     padding: 8px 16px;
-    font-size: 1rem;
+    font-size: 1.05rem;
   }
 }
 

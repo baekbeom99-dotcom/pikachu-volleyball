@@ -286,4 +286,65 @@ describe('rules state machine', () => {
     expect(state.players[1].animState).toBe('lose');
     expect(state.players[1].animTime).toBe(0);
   });
+
+  it('pauses human mode while camera/models are loading and resumes to READY_SERVE once ready', () => {
+    const state = createGameState({
+      controlMode: 'human',
+      opponentMode: 'npc',
+    });
+
+    expect(state.phase).toBe('WAITING_DISTANCE');
+    const startBallY = state.ball.y;
+
+    for (let i = 0; i < 10; i++) {
+      stepGame(state, [IDLE_INPUT, IDLE_INPUT], WORLD.FIXED_DT, false);
+    }
+    expect(state.phase).toBe('WAITING_DISTANCE');
+    expect(state.ball.y).toBe(startBallY);
+    expect(state.ball.vy).toBe(0);
+
+    stepGame(state, [IDLE_INPUT, IDLE_INPUT], WORLD.FIXED_DT, true);
+    expect(state.phase).toBe('READY_SERVE');
+  });
+
+  it('slows ball travel by 20% in motion and hand modes while keeping avatar speed unchanged', () => {
+    const touchState = createGameState({
+      controlMode: 'touch',
+      opponentMode: 'npc',
+      initialPhase: 'READY_SERVE',
+    });
+    const motionState = createGameState({
+      controlMode: 'motion',
+      opponentMode: 'npc',
+      initialPhase: 'READY_SERVE',
+    });
+    const handState = createGameState({
+      controlMode: 'hand',
+      opponentMode: 'npc',
+      initialPhase: 'READY_SERVE',
+    });
+
+    for (const s of [touchState, motionState, handState]) {
+      s.phase = 'PLAYING';
+      s.phaseTimer = 0;
+      s.ball.x = 200;
+      s.ball.y = 180;
+      s.ball.vx = 300;
+      s.ball.vy = 0;
+    }
+
+    const moveRight: PlayerInput = { moveX: 1, targetX: null, jump: false };
+    stepGame(touchState, [moveRight, IDLE_INPUT], WORLD.FIXED_DT, true);
+    stepGame(motionState, [moveRight, IDLE_INPUT], WORLD.FIXED_DT, true);
+    stepGame(handState, [moveRight, IDLE_INPUT], WORLD.FIXED_DT, true);
+
+    const touchDx = touchState.ball.x - 200;
+    const motionDx = motionState.ball.x - 200;
+    const handDx = handState.ball.x - 200;
+
+    expect(motionDx).toBeCloseTo(touchDx * WORLD.MOTION_BALL_SPEED_SCALE, 5);
+    expect(handDx).toBeCloseTo(touchDx * WORLD.MOTION_BALL_SPEED_SCALE, 5);
+    expect(motionState.players[0].x).toBeCloseTo(touchState.players[0].x, 5);
+    expect(handState.players[0].x).toBeCloseTo(touchState.players[0].x, 5);
+  });
 });

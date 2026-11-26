@@ -2,11 +2,14 @@ import { WORLD } from './constants';
 import type {
   BallState,
   CharacterAnimState,
+  HandHitTarget,
   PhysicsEvents,
   PlayerId,
   PlayerInput,
   PlayerState,
 } from './types';
+
+export const HAND_HIT_RADIUS = 38;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -85,6 +88,10 @@ function updatePlayerTimers(player: PlayerState, dt: number): void {
   }
 }
 
+const TARGET_DEADZONE_PX = 1.5;
+const TARGET_DAMP_DISTANCE_PX = 42;
+const TARGET_VX_SLEW_RATE = 14;
+
 function resolveMoveRatio(
   player: PlayerState,
   input: PlayerInput,
@@ -99,11 +106,12 @@ function resolveMoveRatio(
   if (input.targetX !== null) {
     const clampedTarget = clamp(input.targetX, minX, maxX);
     const dx = clampedTarget - player.x;
-    if (Math.abs(dx) < 0.5) {
+    if (Math.abs(dx) <= TARGET_DEADZONE_PX) {
       return 0;
     }
     const maxStep = WORLD.PLAYER_MOVE_SPEED * dt;
-    return maxStep > 0 ? clamp(dx / maxStep, -1, 1) : 0;
+    const dampWindow = Math.max(TARGET_DAMP_DISTANCE_PX, maxStep);
+    return clamp(dx / dampWindow, -1, 1);
   }
 
   return clamp(input.moveX, -1, 1);
@@ -174,13 +182,30 @@ function stepPlayer(
   const prevAnimState = player.animState;
   updatePlayerTimers(player, dt);
 
+  if (input.hands !== undefined) {
+    player.vx = 0;
+    player.vy = 0;
+    player.isGrounded = true;
+    player.facing = player.id === 'p1' ? 1 : -1;
+    player.animState = 'idle';
+    player.animTime += dt;
+    return;
+  }
+
   const { minX, maxX } = getCourtBounds(player.id);
   const moveRatio = resolveMoveRatio(player, input, minX, maxX, dt);
 
-  player.vx =
+  const desiredVx =
     player.slideTimer > 0
       ? player.slideDir * WORLD.SLIDE_SPEED
       : moveRatio * WORLD.PLAYER_MOVE_SPEED;
+
+  if (player.slideTimer <= 0 && input.targetX !== null) {
+    const blend = Math.min(1, TARGET_VX_SLEW_RATE * dt);
+    player.vx = player.vx + (desiredVx - player.vx) * blend;
+  } else {
+    player.vx = desiredVx;
+  }
 
   player.facing = player.id === 'p1' ? 1 : -1;
 
@@ -215,8 +240,12 @@ function stepPlayer(
   player.animState = nextAnimState;
 }
 
-function stepBall(ball: BallState, dt: number): void {
-  ball.vy += WORLD.BALL_GRAVITY * dt;
+function stepBall(
+  ball: BallState,
+  dt: number,
+  gravity: number = WORLD.BALL_GRAVITY,
+): void {
+  ball.vy += gravity * dt;
 
   const speed = Math.hypot(ball.vx, ball.vy);
   if (speed > WORLD.BALL_MAX_SPEED) {
@@ -317,12 +346,76 @@ function collideBallNet(ball: BallState, events: PhysicsEvents): void {
   }
 }
 
+function collideBallHands(
+  ball: BallState,
+  player: PlayerState,
+  hands: HandHitTarget[],
+  events: PhysicsEvents,
+): void {
+  if (player.hitCooldown > 0 || hands.length === 0) {
+    return;
+  }
+
+  const minDist = HAND_HIT_RADIUS + ball.radius;
+  const dir = player.id === 'p1' ? 1 : -1;
+
+  for (const hand of hands) {
+    if (!hand.canHit) {
+      continue;
+    }
+
+    const dx = ball.x - hand.x;
+    const dy = ball.y - hand.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist >= minDist) {
+      continue;
+    }
+
+    const nx = dist > 0.0001 ? dx / dist : 0;
+    const ny = dist > 0.0001 ? dy / dist : -1;
+
+    ball.x = clamp(hand.x + nx * minDist, ball.radius, WORLD.WIDTH - ball.radius);
+    ball.y = Math.min(WORLD.FLOOR_Y - ball.radius, hand.y + ny * minDist);
+
+    const handSpeed = Math.hypot(hand.vx, hand.vy);
+    const isStrikeTiming =
+      hand.y <= WORLD.NET_TOP_Y + 60 && handSpeed >= 180 && ball.vy <= 420;
+    const isUpperContact = ny <= 0.1;
+    const isMovingTowardNet = hand.vx * dir >= 140;
+
+    if (isStrikeTiming && isUpperContact && isMovingTowardNet) {
+      const angleRad = ball.y <= WORLD.NET_TOP_Y - 20 ? -0.18 : -0.36;
+      ball.vx = dir * Math.cos(angleRad) * WORLD.SPIKE_SPEED;
+      ball.vy = Math.sin(angleRad) * WORLD.SPIKE_SPEED;
+      ball.isSpiked = true;
+      ball.spin = dir * 18;
+      player.hitCooldown = WORLD.HIT_COOLDOWN_SPIKE;
+      events.spikedBy = player.id;
+      return;
+    }
+
+    ball.vx = clamp(nx * 290 + hand.vx * 0.45 + dir * 40, -520, 520);
+    ball.vy = clamp(ny * 520 + hand.vy * 0.32 - 220, -760, -520);
+    ball.isSpiked = false;
+    ball.spin = ball.vx * 0.015;
+    player.hitCooldown = WORLD.HIT_COOLDOWN_VOLLEY;
+    events.volleyBy = player.id;
+    return;
+  }
+}
+
 function collideBallPlayer(
   ball: BallState,
   player: PlayerState,
   input: PlayerInput,
   events: PhysicsEvents,
 ): void {
+  if (input.hands !== undefined) {
+    collideBallHands(ball, player, input.hands, events);
+    return;
+  }
+
   if (player.hitCooldown > 0) {
     return;
   }
@@ -430,6 +523,7 @@ export function stepPhysics(
   ball: BallState,
   inputs: [PlayerInput, PlayerInput],
   dt: number,
+  ballTimeScale = 1,
 ): PhysicsEvents {
   const events: PhysicsEvents = {
     spikedBy: null,
@@ -447,7 +541,15 @@ export function stepPhysics(
   stepPlayer(players[0], inputs[0], ball, dt, events);
   stepPlayer(players[1], inputs[1], ball, dt, events);
 
-  stepBall(ball, dt);
+  const isHumanArMode =
+    inputs[0].hands !== undefined || inputs[1].hands !== undefined;
+  const ballGravity = isHumanArMode
+    ? WORLD.HUMAN_BALL_GRAVITY
+    : WORLD.BALL_GRAVITY;
+  const safeBallScale =
+    Number.isFinite(ballTimeScale) && ballTimeScale > 0 ? ballTimeScale : 1;
+
+  stepBall(ball, dt * safeBallScale, ballGravity);
   collideBallWalls(ball, events);
   collideBallNet(ball, events);
   collideBallPlayer(ball, players[0], inputs[0], events);

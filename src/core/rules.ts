@@ -78,7 +78,11 @@ export function createGameState(options: CreateGameOptions): GameState {
   const targetScore = options.targetScore ?? 15;
   const initialPhase =
     options.initialPhase ??
-    (options.controlMode === 'motion' ? 'WAITING_DISTANCE' : 'READY_SERVE');
+    (options.controlMode === 'motion' ||
+    options.controlMode === 'hand' ||
+    options.controlMode === 'human'
+      ? 'WAITING_DISTANCE'
+      : 'READY_SERVE');
 
   return {
     controlMode: options.controlMode,
@@ -143,7 +147,11 @@ export function stepGame(
     return state.lastEvents;
   }
 
-  if (state.controlMode === 'motion') {
+  if (
+    state.controlMode === 'motion' ||
+    state.controlMode === 'hand' ||
+    state.controlMode === 'human'
+  ) {
     if (!motionReady) {
       if (state.phase === 'READY_SERVE' || state.phase === 'PLAYING') {
         state.pausedFromPhase = state.phase;
@@ -174,7 +182,17 @@ export function stepGame(
   }
 
   if (state.phase === 'PLAYING') {
-    const events = stepPhysics(state.players, state.ball, inputs, dt);
+    const ballTimeScale =
+      state.controlMode === 'motion' || state.controlMode === 'hand'
+        ? WORLD.MOTION_BALL_SPEED_SCALE
+        : 1;
+    const events = stepPhysics(
+      state.players,
+      state.ball,
+      inputs,
+      dt,
+      ballTimeScale,
+    );
     state.lastEvents = events;
 
     if (events.ballHitFloorSide !== null) {

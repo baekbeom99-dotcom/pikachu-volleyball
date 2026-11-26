@@ -1,6 +1,6 @@
 export type PlayerId = 'p1' | 'p2';
 
-export type ControlMode = 'touch' | 'motion' | 'human';
+export type ControlMode = 'touch' | 'motion' | 'hand' | 'human';
 
 export type OpponentMode = 'npc' | '2p';
 
@@ -25,10 +25,25 @@ export type CharacterAnimState =
   | 'win'
   | 'lose';
 
+export interface HandHitTarget {
+  /** World X coordinate (`0..WORLD.WIDTH`). */
+  x: number;
+  /** World Y coordinate (`0..WORLD.FLOOR_Y`). */
+  y: number;
+  /** Horizontal hand velocity in world px/s. */
+  vx: number;
+  /** Vertical hand velocity in world px/s. */
+  vy: number;
+  /** True only when a closed fist is active within the 1-second hit window. */
+  canHit: boolean;
+}
+
 export interface PlayerInput {
   moveX: number;
   targetX: number | null;
   jump: boolean;
+  /** Direct AR hand targets used in `'human'` mode. */
+  hands?: HandHitTarget[];
 }
 
 export interface PlayerState {
@@ -117,18 +132,36 @@ export interface MotionOverlayData {
   activeSide?: 'left' | 'right';
 }
 
-export interface HandOverlayPoint {
+export interface HandMotionSideStatus {
   side: 'left' | 'right';
   detected: boolean;
+  moveX: number;
   normX: number;
   normY: number;
   jumpActive: boolean;
 }
 
+export interface HandMotionOverlayData {
+  isReady: boolean;
+  error: string | null;
+  statuses: [HandMotionSideStatus, HandMotionSideStatus];
+}
+
+export interface HumanHandVisual {
+  playerId: PlayerId;
+  x: number;
+  y: number;
+  isFist: boolean;
+  canHit: boolean;
+  /** Normalized `[0..1]` remaining active time inside the 1-second fist window. */
+  fistRemainingRatio: number;
+}
+
 export interface HumanOverlayData {
   isReady: boolean;
   error: string | null;
-  /** Segmented person cutouts (transparent background) for P1 and P2. */
+  /** 1:1 background-removed camera cutouts (no avatar crop/resize) for P1 and optional P2. */
   cutouts: [HTMLCanvasElement | null, HTMLCanvasElement | null];
-  hands: HandOverlayPoint[];
+  /** Active AR hand hit rings in world coordinates. */
+  hands: HumanHandVisual[];
 }

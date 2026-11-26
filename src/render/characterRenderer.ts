@@ -18,14 +18,14 @@ export interface CharacterRenderer {
   render(ctx: CanvasRenderingContext2D, data: CharacterRenderData): void;
 }
 
-export interface SquashPose {
+interface SquashPose {
   scaleX: number;
   scaleY: number;
   tiltRad: number;
   offsetY: number;
 }
 
-export function computeSquashPose(
+function computeSquashPose(
   animState: CharacterAnimState,
   animTime: number,
   facing: 1 | -1,

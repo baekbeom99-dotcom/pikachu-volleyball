@@ -223,7 +223,7 @@ describe('PopArtSceneRenderer', () => {
     expect(zeroTexts).not.toContain('JUMP');
   });
 
-  it('renders human cutout in place of P1 avatar while keeping NPC sprite and hand HUD in human mode', () => {
+  it('renders 1:1 human cutout across left court without P1 avatar and draws AR hand rings', () => {
     const renderer = new PopArtSceneRenderer({ preloadSprites: false });
     const state = createGameState({
       controlMode: 'human',
@@ -231,7 +231,7 @@ describe('PopArtSceneRenderer', () => {
       initialPhase: 'READY_SERVE',
     });
     state.phase = 'PLAYING';
-    const fakeCutout = { width: 180, height: 220 } as unknown as HTMLCanvasElement;
+    const fakeCutout = { width: 212, height: 230 } as unknown as HTMLCanvasElement;
 
     const ctx = createMockCanvas2D();
     renderer.render(ctx, state, {
@@ -244,19 +244,170 @@ describe('PopArtSceneRenderer', () => {
         isReady: true,
         error: null,
         cutouts: [fakeCutout, null],
-        hands: [{ side: 'left', detected: true, normX: 0.4, normY: 0.5, jumpActive: true }],
+        hands: [
+          { playerId: 'p1', x: 220, y: 260, isFist: true, canHit: true, fistRemainingRatio: 0.7 },
+          { playerId: 'p1', x: 140, y: 310, isFist: true, canHit: false, fistRemainingRatio: 0 },
+        ],
       },
       showPlaceholders: true,
     });
 
-    expect(ctx.drawImage).toHaveBeenCalled();
-    const drawImageFirstArg = (ctx.drawImage as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(drawImageFirstArg).toBe(fakeCutout);
+    expect(ctx.drawImage).toHaveBeenCalledWith(fakeCutout, 0, 76, WORLD.NET_LEFT, WORLD.FLOOR_Y - 76);
 
-    const texts = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
-    expect(texts).toContain('P1');
-    expect(texts).toContain('P2');
-    expect(texts).toContain('JUMP');
+    const mainCalls = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls;
+    const texts = mainCalls.map((c) => c[0]);
+    expect(texts).not.toContain('P1'); // P1 Pikachu avatar omitted in human mode
+    expect(texts).toContain('P2'); // NPC Pikachu still rendered on right court
+    expect(texts).not.toContain('SPIKE');
+    expect(texts).not.toContain('주먹을 쥐세요');
+    expect(
+      mainCalls.some((c) => c[0] === '0.70' && c[1] === 220 && c[2] === 260),
+    ).toBe(true);
+    expect(texts).toContain('0.00');
+    expect(texts).toContain('OPEN!');
+
+    // Open hand shows '주먹을 쥐세요' inside the hand ring
+    const openCtx = createMockCanvas2D();
+    renderer.render(openCtx, state, {
+      joysticks: [],
+      canvasCssWidth: WORLD.WIDTH,
+      canvasCssHeight: WORLD.HEIGHT,
+      motionOverlay: null,
+      motionPreviewCanvas: null,
+      humanOverlay: {
+        isReady: true,
+        error: null,
+        cutouts: [fakeCutout, null],
+        hands: [
+          { playerId: 'p1', x: 200, y: 250, isFist: false, canHit: false, fistRemainingRatio: 0 },
+        ],
+      },
+      showPlaceholders: true,
+    });
+    const openCalls = (openCtx.fillText as ReturnType<typeof vi.fn>).mock.calls;
+    expect(
+      openCalls.some((c) => c[0] === '주먹을 쥐세요' && c[1] === 200 && c[2] === 250),
+    ).toBe(true);
+  });
+
+  it('renders unsplit full-frame cam above P1 court in 1P hand mode and split halves in 2P hand mode', () => {
+    const renderer = new PopArtSceneRenderer({ preloadSprites: false });
+    const fakePreview = { width: 480, height: 360 } as unknown as HTMLCanvasElement;
+
+    // 1P loading state: single unsplit panel on P1 left court
+    const loadingState = createGameState({
+      controlMode: 'hand',
+      opponentMode: 'npc',
+      initialPhase: 'WAITING_DISTANCE',
+    });
+    const loadingCtx = createMockCanvas2D();
+    renderer.render(loadingCtx, loadingState, {
+      joysticks: [],
+      canvasCssWidth: WORLD.WIDTH,
+      canvasCssHeight: WORLD.HEIGHT,
+      motionOverlay: null,
+      motionPreviewCanvas: null,
+      handPreviewCanvas: null,
+      handMotionOverlay: {
+        isReady: false,
+        error: null,
+        statuses: [
+          { side: 'left', detected: false, moveX: 0, normX: 0.5, normY: 0.5, jumpActive: false },
+          { side: 'right', detected: false, moveX: 0, normX: 0.5, normY: 0.5, jumpActive: false },
+        ],
+      },
+      showPlaceholders: true,
+    });
+
+    const loadingTexts = (loadingCtx.fillText as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0],
+    );
+    expect(loadingTexts).toContain('LOADING...');
+    expect(loadingTexts).toContain('1P');
+    expect(loadingTexts).not.toContain('NPC');
+
+    // 1P ready state: single unsplit full-frame cam (sx=0, sw=480) over P1 left court + mini gauge
+    const readyState1p = createGameState({
+      controlMode: 'hand',
+      opponentMode: 'npc',
+      initialPhase: 'READY_SERVE',
+    });
+    const readyCtx1p = createMockCanvas2D();
+    renderer.render(readyCtx1p, readyState1p, {
+      joysticks: [],
+      canvasCssWidth: WORLD.WIDTH,
+      canvasCssHeight: WORLD.HEIGHT,
+      motionOverlay: null,
+      motionPreviewCanvas: null,
+      handPreviewCanvas: fakePreview,
+      handMotionOverlay: {
+        isReady: true,
+        error: null,
+        statuses: [
+          { side: 'left', detected: true, moveX: 0.7, normX: 0.4, normY: 0.2, jumpActive: true },
+          { side: 'right', detected: false, moveX: 0, normX: 0.5, normY: 0.5, jumpActive: false },
+        ],
+      },
+      showPlaceholders: true,
+    });
+
+    const drawCalls1p = (readyCtx1p.drawImage as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call) => call[0] === fakePreview,
+    );
+    expect(drawCalls1p).toHaveLength(1);
+    expect(drawCalls1p[0][1]).toBe(0);
+    expect(drawCalls1p[0][3]).toBe(480);
+    expect(drawCalls1p[0][5] + drawCalls1p[0][7] * 0.5).toBeCloseTo(WORLD.NET_LEFT * 0.5, 5);
+
+    const readyTexts1p = (readyCtx1p.fillText as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0],
+    );
+    expect(readyTexts1p).toContain('1P');
+    expect(readyTexts1p).not.toContain('NPC');
+    expect(readyTexts1p).toContain('JUMP');
+    expect(readyTexts1p).toContain('P1');
+    expect(readyTexts1p).toContain('P2');
+
+    // 2P ready state: splits preview into left/right halves (sx=0/240, sw=240)
+    const readyState2p = createGameState({
+      controlMode: 'hand',
+      opponentMode: '2p',
+      initialPhase: 'READY_SERVE',
+    });
+    const readyCtx2p = createMockCanvas2D();
+    renderer.render(readyCtx2p, readyState2p, {
+      joysticks: [],
+      canvasCssWidth: WORLD.WIDTH,
+      canvasCssHeight: WORLD.HEIGHT,
+      motionOverlay: null,
+      motionPreviewCanvas: null,
+      handPreviewCanvas: fakePreview,
+      handMotionOverlay: {
+        isReady: true,
+        error: null,
+        statuses: [
+          { side: 'left', detected: false, moveX: 0, normX: 0.5, normY: 0.5, jumpActive: false },
+          { side: 'right', detected: true, moveX: -0.4, normX: 0.6, normY: 0.5, jumpActive: false },
+        ],
+      },
+      showPlaceholders: true,
+    });
+
+    const drawCalls2p = (readyCtx2p.drawImage as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call) => call[0] === fakePreview,
+    );
+    expect(drawCalls2p).toHaveLength(2);
+    expect(drawCalls2p[0][1]).toBe(0);
+    expect(drawCalls2p[0][3]).toBe(240);
+    expect(drawCalls2p[1][1]).toBe(240);
+    expect(drawCalls2p[1][3]).toBe(240);
+
+    const texts2p = (readyCtx2p.fillText as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0],
+    );
+    expect(texts2p).toContain('SHOW HAND');
+    expect(texts2p).toContain('1P');
+    expect(texts2p).toContain('2P');
   });
 
   it('renders split camera halves centered in each court without STEP BACK warnings', () => {

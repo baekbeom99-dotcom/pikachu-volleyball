@@ -744,4 +744,104 @@ describe('stepPhysics', () => {
     expect(p1.facing).toBe(1);
     expect(p2.facing).toBe(-1);
   });
+
+  it('hits ball only when fist canHit is true (ignores open/expired hands and has no hand-gesture spike)', () => {
+    const p1 = createInitialPlayer('p1');
+    const p2 = createInitialPlayer('p2');
+    const ball = createInitialBall('p1');
+    const idle = { moveX: 0, targetX: null, jump: false };
+
+    // Open hand or >1s expired fist (`canHit: false`) must NOT hit the ball
+    ball.x = 200;
+    ball.y = 430;
+    ball.vy = 150;
+    const missEv = stepPhysics(
+      [p1, p2],
+      ball,
+      [
+        {
+          ...idle,
+          hands: [{ x: 190, y: 455, vx: 200, vy: -200, canHit: false }],
+        },
+        idle,
+      ],
+      WORLD.FIXED_DT,
+    );
+    expect(missEv.volleyBy).toBeNull();
+    expect(missEv.spikedBy).toBeNull();
+    expect(ball.vy).toBeGreaterThan(0);
+
+    // Closed fist moving away from net triggers normal volley (no spike)
+    ball.x = 290;
+    ball.y = WORLD.NET_TOP_Y - 10;
+    ball.vy = 60;
+    const retreatVolleyEv = stepPhysics(
+      [p1, p2],
+      ball,
+      [
+        {
+          ...idle,
+          hands: [{ x: 265, y: WORLD.NET_TOP_Y + 5, vx: -250, vy: -80, canHit: true }],
+        },
+        idle,
+      ],
+      WORLD.FIXED_DT,
+    );
+    expect(retreatVolleyEv.volleyBy).toBe('p1');
+    expect(retreatVolleyEv.spikedBy).toBeNull();
+    expect(ball.isSpiked).toBe(false);
+    expect(ball.vy).toBeLessThan(-500);
+
+    // Closed fist meeting all 3 spike conditions: strike timing (high active swing), upper contact (ny <= 0.1), moving toward net (vx * dir >= 140)
+    p1.hitCooldown = 0;
+    ball.x = 290;
+    ball.y = WORLD.NET_TOP_Y - 25;
+    ball.vy = 60;
+    const spikeEv = stepPhysics(
+      [p1, p2],
+      ball,
+      [
+        {
+          ...idle,
+          hands: [{ x: 260, y: WORLD.NET_TOP_Y + 5, vx: 320, vy: -40, canHit: true }],
+        },
+        idle,
+      ],
+      WORLD.FIXED_DT,
+    );
+    expect(spikeEv.spikedBy).toBe('p1');
+    expect(spikeEv.volleyBy).toBeNull();
+    expect(ball.isSpiked).toBe(true);
+    expect(ball.vx).toBeGreaterThan(750);
+
+    // Lower contact (`ny > 0.1`) even while moving toward net does NOT spike
+    p1.hitCooldown = 0;
+    ball.x = 290;
+    ball.y = WORLD.NET_TOP_Y + 35;
+    ball.vy = 60;
+    const underHitEv = stepPhysics(
+      [p1, p2],
+      ball,
+      [
+        {
+          ...idle,
+          hands: [{ x: 260, y: WORLD.NET_TOP_Y + 5, vx: 320, vy: 0, canHit: true }],
+        },
+        idle,
+      ],
+      WORLD.FIXED_DT,
+    );
+    expect(underHitEv.volleyBy).toBe('p1');
+    expect(underHitEv.spikedBy).toBeNull();
+    expect(ball.isSpiked).toBe(false);
+
+    // Lighter gravity in human mode lets ball stay higher compared to default mode
+    const humanBall = createInitialBall('p1');
+    humanBall.vy = -500;
+    const normalBall = createInitialBall('p1');
+    normalBall.vy = -500;
+    stepPhysics([p1, p2], humanBall, [{ ...idle, hands: [] }, idle], WORLD.FIXED_DT);
+    stepPhysics([p1, p2], normalBall, [idle, idle], WORLD.FIXED_DT);
+    expect(humanBall.y).toBeLessThan(normalBall.y);
+  });
 });

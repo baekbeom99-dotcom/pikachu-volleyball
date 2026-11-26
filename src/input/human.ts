@@ -1,17 +1,16 @@
 import { FilesetResolver, HandLandmarker, ImageSegmenter } from '@mediapipe/tasks-vision';
 import type {
-  HandOverlayPoint,
+  HumanHandVisual,
   HumanOverlayData,
   OpponentMode,
   PlayerInput,
 } from '../core/types';
 import {
-  assignHandsToSides,
-  createHandTrackerState,
-  evaluateHandInput,
-  smoothCropBounds,
-  type CropBounds,
-  type HandTrackerState,
+  advanceSideHandsTimers,
+  createSideHandsTrackerState,
+  evaluateArHands,
+  partitionHandsForArPlayers,
+  type SideHandsTrackerState,
 } from './handMath';
 import type { NormalizedLandmark } from './motionMath';
 import { idleInput, type InputProvider } from './types';
@@ -23,10 +22,9 @@ const HAND_MODEL_URL =
 const SEGMENTER_MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite';
 
-const WORK_WIDTH = 256;
-const WORK_HEIGHT = 192;
-const CUTOUT_WIDTH = 180;
-const CUTOUT_HEIGHT = 220;
+const HALF_COURT_W = 212;
+const HALF_COURT_H = 230;
+const TWO_PLAYER_WORK_W = HALF_COURT_W * 2;
 
 type VisionFileset = Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>;
 
@@ -103,9 +101,9 @@ function formatHumanError(err: unknown): string {
 }
 
 /**
- * Webcam provider for Human mode:
- * 1) Tracks hands via MediaPipe HandLandmarker so the game is playable using hands only.
- * 2) Extracts background-removed person cutouts via ImageSegmenter so the real player replaces the avatar.
+ * 1:1 AR webcam provider for Human mode:
+ * - Removes background via MediaPipe Selfie ImageSegmenter without shrinking or cropping onto an avatar.
+ * - Tracks hands via HandLandmarker so players strike the volleyball directly with their hands.
  */
 export class HumanInputProvider implements InputProvider {
   private readonly videoEl: HTMLVideoElement;
@@ -126,18 +124,18 @@ export class HumanInputProvider implements InputProvider {
   private cutoutP2Canvas: HTMLCanvasElement | null = null;
   private cutoutP2Ctx: CanvasRenderingContext2D | null = null;
 
-  private leftTracker: HandTrackerState = createHandTrackerState();
-  private rightTracker: HandTrackerState = createHandTrackerState();
-  private cropBoundsP1: CropBounds | null = null;
-  private cropBoundsP2: CropBounds | null = null;
+  private leftTracker: SideHandsTrackerState = createSideHandsTrackerState();
+  private rightTracker: SideHandsTrackerState = createSideHandsTrackerState();
 
-  private cachedInputs: [PlayerInput, PlayerInput] = [idleInput(), idleInput()];
-  private cachedHands: HandOverlayPoint[] = [
-    { side: 'left', detected: false, normX: 0.5, normY: 0.5, jumpActive: false },
+  private cachedInputs: [PlayerInput, PlayerInput] = [
+    { ...idleInput(), hands: [] },
+    idleInput(),
   ];
+  private cachedHandVisuals: HumanHandVisual[] = [];
 
   private lastVideoTime = -1;
   private lastTimestampMs = -1;
+  private pendingEvalDt = 0;
   private initError: string | null = null;
   private initialized = false;
   private disposed = false;
@@ -147,13 +145,29 @@ export class HumanInputProvider implements InputProvider {
     this.opponentMode = options.opponentMode;
   }
 
+  private getWorkWidth(): number {
+    return this.opponentMode === '2p' ? TWO_PLAYER_WORK_W : HALF_COURT_W;
+  }
+
+  private syncWorkBufferSizes(): void {
+    const targetW = this.getWorkWidth();
+    if (this.workCanvas && this.workCanvas.width !== targetW) {
+      this.workCanvas.width = targetW;
+      this.workCanvas.height = HALF_COURT_H;
+    }
+    if (this.maskedCanvas && this.maskedCanvas.width !== targetW) {
+      this.maskedCanvas.width = targetW;
+      this.maskedCanvas.height = HALF_COURT_H;
+    }
+  }
+
   private async createHandLandmarker(fileset: VisionFileset): Promise<HandLandmarker> {
     const baseConfig = {
       runningMode: 'VIDEO' as const,
-      numHands: this.opponentMode === '2p' ? 2 : 1,
-      minHandDetectionConfidence: 0.5,
-      minHandPresenceConfidence: 0.5,
-      minTrackingConfidence: 0.5,
+      numHands: this.opponentMode === '2p' ? 4 : 2,
+      minHandDetectionConfidence: 0.45,
+      minHandPresenceConfidence: 0.45,
+      minTrackingConfidence: 0.45,
     };
 
     try {
@@ -228,10 +242,11 @@ export class HumanInputProvider implements InputProvider {
       return;
     }
 
-    const work = createOffscreenCanvas(WORK_WIDTH, WORK_HEIGHT);
-    const masked = createOffscreenCanvas(WORK_WIDTH, WORK_HEIGHT);
-    const cutout1 = createOffscreenCanvas(CUTOUT_WIDTH, CUTOUT_HEIGHT);
-    const cutout2 = createOffscreenCanvas(CUTOUT_WIDTH, CUTOUT_HEIGHT);
+    const workW = this.getWorkWidth();
+    const work = createOffscreenCanvas(workW, HALF_COURT_H);
+    const masked = createOffscreenCanvas(workW, HALF_COURT_H);
+    const cutout1 = createOffscreenCanvas(HALF_COURT_W, HALF_COURT_H);
+    const cutout2 = createOffscreenCanvas(HALF_COURT_W, HALF_COURT_H);
     if (!work || !masked || !cutout1 || !cutout2) {
       this.initError =
         '캔버스 컨텍스트를 생성할 수 없습니다. (Canvas 2D context unavailable)';
@@ -305,20 +320,20 @@ export class HumanInputProvider implements InputProvider {
     }
   }
 
-  /** Switches between 1P ('npc') and 2P ('2p') mode, updating hand count accordingly. */
+  /** Switches between 1P ('npc') and 2P ('2p') mode cleanly. */
   setOpponentMode(mode: OpponentMode): void {
     if (this.opponentMode === mode) {
       return;
     }
     this.opponentMode = mode;
+    this.syncWorkBufferSizes();
     if (this.handLandmarker && typeof this.handLandmarker.setOptions === 'function') {
       void this.handLandmarker
-        .setOptions({ numHands: mode === '2p' ? 2 : 1 })
+        .setOptions({ numHands: mode === '2p' ? 4 : 2 })
         .catch(() => {});
     }
   }
 
-  /** Returns true once webcam + HandLandmarker + ImageSegmenter are ready. */
   isHumanReady(): boolean {
     return this.initialized && this.initError === null;
   }
@@ -335,7 +350,7 @@ export class HumanInputProvider implements InputProvider {
         this.initialized ? this.cutoutP1Canvas : null,
         this.initialized && this.opponentMode === '2p' ? this.cutoutP2Canvas : null,
       ],
-      hands: this.cachedHands.map((h) => ({ ...h })),
+      hands: this.cachedHandVisuals.map((h) => ({ ...h })),
     };
   }
 
@@ -356,10 +371,21 @@ export class HumanInputProvider implements InputProvider {
       ];
     }
 
+    const safeDt = Number.isFinite(dt) && dt > 0 ? dt : 0;
+    this.pendingEvalDt += safeDt;
+
     const currentVideoTime = this.videoEl.currentTime;
     if (currentVideoTime !== this.lastVideoTime) {
       this.lastVideoTime = currentVideoTime;
-      drawMirroredAspectFit(this.workCtx, this.videoEl, WORK_WIDTH, WORK_HEIGHT);
+      const evalDt = this.pendingEvalDt;
+      this.pendingEvalDt = 0;
+      this.syncWorkBufferSizes();
+      drawMirroredAspectFit(
+        this.workCtx,
+        this.videoEl,
+        this.workCanvas.width,
+        HALF_COURT_H,
+      );
 
       const nowMs =
         typeof performance !== 'undefined' && typeof performance.now === 'function'
@@ -369,8 +395,25 @@ export class HumanInputProvider implements InputProvider {
         nowMs > this.lastTimestampMs ? nowMs : this.lastTimestampMs + 1;
       this.lastTimestampMs = timestampMs;
 
-      this.updateHandTracking(timestampMs, dt);
+      this.updateHandTracking(timestampMs, evalDt);
       this.updateSegmentationCutouts(timestampMs);
+    } else if (safeDt > 0) {
+      advanceSideHandsTimers(
+        this.leftTracker,
+        this.cachedInputs[0].hands,
+        this.cachedHandVisuals,
+        'p1',
+        safeDt,
+      );
+      if (this.opponentMode === '2p') {
+        advanceSideHandsTimers(
+          this.rightTracker,
+          this.cachedInputs[1].hands,
+          this.cachedHandVisuals,
+          'p2',
+          safeDt,
+        );
+      }
     }
 
     return [
@@ -386,61 +429,60 @@ export class HumanInputProvider implements InputProvider {
 
     const result = this.handLandmarker.detectForVideo(this.workCanvas, timestampMs);
     const allHands = (result.landmarks ?? []) as NormalizedLandmark[][];
-    const assigned = assignHandsToSides(
-      allHands,
-      this.opponentMode,
-      this.leftTracker.smoothedX,
-    );
+    const partitioned = partitionHandsForArPlayers(allHands, this.opponentMode);
 
-    const leftEval = evaluateHandInput(
-      'left',
-      assigned.left,
-      this.leftTracker,
-      dt,
-      this.opponentMode === '2p' ? { minX: 0, maxX: 0.5 } : { minX: 0, maxX: 1 },
-    );
-
+    const p1Hands = evaluateArHands('left', partitioned.left, this.leftTracker, dt);
     this.cachedInputs[0] = {
       moveX: 0,
-      targetX: leftEval.targetX,
-      jump: leftEval.jump,
+      targetX: null,
+      jump: false,
+      hands: p1Hands.map((h) => ({
+        x: h.x,
+        y: h.y,
+        vx: h.vx,
+        vy: h.vy,
+        canHit: h.canHit,
+      })),
     };
 
-    const handsOverlay: HandOverlayPoint[] = [
-      {
-        side: 'left',
-        detected: leftEval.detected,
-        normX: leftEval.normX,
-        normY: leftEval.normY,
-        jumpActive: leftEval.jump,
-      },
-    ];
+    const visuals: HumanHandVisual[] = p1Hands.map((h) => ({
+      playerId: 'p1',
+      x: h.x,
+      y: h.y,
+      isFist: h.isFist,
+      canHit: h.canHit,
+      fistRemainingRatio: h.fistRemainingRatio,
+    }));
 
     if (this.opponentMode === '2p') {
-      const rightEval = evaluateHandInput(
-        'right',
-        assigned.right,
-        this.rightTracker,
-        dt,
-        { minX: 0.5, maxX: 1 },
-      );
+      const p2Hands = evaluateArHands('right', partitioned.right, this.rightTracker, dt);
       this.cachedInputs[1] = {
         moveX: 0,
-        targetX: rightEval.targetX,
-        jump: rightEval.jump,
+        targetX: null,
+        jump: false,
+        hands: p2Hands.map((h) => ({
+          x: h.x,
+          y: h.y,
+          vx: h.vx,
+          vy: h.vy,
+          canHit: h.canHit,
+        })),
       };
-      handsOverlay.push({
-        side: 'right',
-        detected: rightEval.detected,
-        normX: rightEval.normX,
-        normY: rightEval.normY,
-        jumpActive: rightEval.jump,
-      });
+      for (const h of p2Hands) {
+        visuals.push({
+          playerId: 'p2',
+          x: h.x,
+          y: h.y,
+          isFist: h.isFist,
+          canHit: h.canHit,
+          fistRemainingRatio: h.fistRemainingRatio,
+        });
+      }
     } else {
       this.cachedInputs[1] = idleInput();
     }
 
-    this.cachedHands = handsOverlay;
+    this.cachedHandVisuals = visuals;
   }
 
   private updateSegmentationCutouts(timestampMs: number): void {
@@ -473,56 +515,25 @@ export class HumanInputProvider implements InputProvider {
       /background/i.test(this.segmenterLabels[0] ?? '');
 
     const maskIndex =
-      masks.length >= 2
-        ? personLabelIndex >= 0
-          ? personLabelIndex
-          : 1
-        : 0;
+      masks.length >= 2 ? (personLabelIndex >= 0 ? personLabelIndex : 1) : 0;
     const mask = masks[maskIndex];
     const conf = mask.getAsFloat32Array();
-    const maskW = mask.width || WORK_WIDTH;
-    const maskH = mask.height || WORK_HEIGHT;
+    const maskW = mask.width || this.workCanvas.width;
+    const maskH = mask.height || HALF_COURT_H;
 
-    const srcData = this.workCtx.getImageData(0, 0, WORK_WIDTH, WORK_HEIGHT);
+    const workW = this.workCanvas.width;
+    const srcData = this.workCtx.getImageData(0, 0, workW, HALF_COURT_H);
     const pixels = srcData.data;
+    const sameSize = maskW === workW && maskH === HALF_COURT_H;
 
-    let minX1 = WORK_WIDTH;
-    let minY1 = WORK_HEIGHT;
-    let maxX1 = -1;
-    let maxY1 = -1;
-    let minX2 = WORK_WIDTH;
-    let minY2 = WORK_HEIGHT;
-    let maxX2 = -1;
-    let maxY2 = -1;
-
-    const splitX = Math.floor(WORK_WIDTH * 0.5);
-    const sameSize = maskW === WORK_WIDTH && maskH === WORK_HEIGHT;
-
-    for (let y = 0; y < WORK_HEIGHT; y++) {
-      const my = sameSize ? y : Math.min(maskH - 1, Math.floor((y * maskH) / WORK_HEIGHT));
-      for (let x = 0; x < WORK_WIDTH; x++) {
-        const mx = sameSize ? x : Math.min(maskW - 1, Math.floor((x * maskW) / WORK_WIDTH));
+    for (let y = 0; y < HALF_COURT_H; y++) {
+      const my = sameSize ? y : Math.min(maskH - 1, Math.floor((y * maskH) / HALF_COURT_H));
+      for (let x = 0; x < workW; x++) {
+        const mx = sameSize ? x : Math.min(maskW - 1, Math.floor((x * maskW) / workW));
         const raw = conf[my * maskW + mx] ?? 0;
         const personProb = singleIsBackground ? 1 - raw : raw;
-        const alphaFloat = smoothstep(0.35, 0.72, personProb);
-        const alphaByte = Math.round(alphaFloat * 255);
-
-        const idx = (y * WORK_WIDTH + x) * 4;
-        pixels[idx + 3] = alphaByte;
-
-        if (alphaByte >= 96) {
-          if (this.opponentMode === 'npc' || x < splitX) {
-            if (x < minX1) minX1 = x;
-            if (y < minY1) minY1 = y;
-            if (x > maxX1) maxX1 = x;
-            if (y > maxY1) maxY1 = y;
-          } else {
-            if (x < minX2) minX2 = x;
-            if (y < minY2) minY2 = y;
-            if (x > maxX2) maxX2 = x;
-            if (y > maxY2) maxY2 = y;
-          }
-        }
+        const alphaByte = Math.round(smoothstep(0.35, 0.72, personProb) * 255);
+        pixels[(y * workW + x) * 4 + 3] = alphaByte;
       }
     }
 
@@ -534,100 +545,34 @@ export class HumanInputProvider implements InputProvider {
       }
     }
 
-    const crop1 = this.resolveTargetCrop(
-      this.cropBoundsP1,
-      minX1,
-      minY1,
-      maxX1,
-      maxY1,
+    // 1:1 natural projection into P1 (left half-court) and P2 (right half-court) without resizing/cropping onto an avatar
+    this.cutoutP1Ctx.clearRect(0, 0, HALF_COURT_W, HALF_COURT_H);
+    this.cutoutP1Ctx.drawImage(
+      this.maskedCanvas,
       0,
-      this.opponentMode === '2p' ? splitX : WORK_WIDTH,
+      0,
+      HALF_COURT_W,
+      HALF_COURT_H,
+      0,
+      0,
+      HALF_COURT_W,
+      HALF_COURT_H,
     );
-    this.cropBoundsP1 = crop1;
-    this.drawCutout(this.cutoutP1Ctx, crop1);
 
     if (this.opponentMode === '2p') {
-      const crop2 = this.resolveTargetCrop(
-        this.cropBoundsP2,
-        minX2,
-        minY2,
-        maxX2,
-        maxY2,
-        splitX,
-        WORK_WIDTH,
-      );
-      this.cropBoundsP2 = crop2;
-      this.drawCutout(this.cutoutP2Ctx, crop2);
-    }
-  }
-
-  private resolveTargetCrop(
-    prev: CropBounds | null,
-    minX: number,
-    minY: number,
-    maxX: number,
-    maxY: number,
-    regionMinX: number,
-    regionMaxX: number,
-  ): CropBounds {
-    const regionWidth = Math.max(1, regionMaxX - regionMinX);
-    if (maxX <= minX || maxY <= minY) {
-      return (
-        prev ?? {
-          sx: regionMinX,
-          sy: 0,
-          sw: regionWidth,
-          sh: WORK_HEIGHT,
-        }
+      this.cutoutP2Ctx.clearRect(0, 0, HALF_COURT_W, HALF_COURT_H);
+      this.cutoutP2Ctx.drawImage(
+        this.maskedCanvas,
+        HALF_COURT_W,
+        0,
+        HALF_COURT_W,
+        HALF_COURT_H,
+        0,
+        0,
+        HALF_COURT_W,
+        HALF_COURT_H,
       );
     }
-
-    const rawW = maxX - minX + 1;
-    const rawH = maxY - minY + 1;
-    const padX = Math.max(10, rawW * 0.14);
-    const padTop = Math.max(10, rawH * 0.12);
-    const padBottom = Math.max(4, rawH * 0.04);
-
-    const sx = Math.max(regionMinX, minX - padX);
-    const sy = Math.max(0, minY - padTop);
-    const ex = Math.min(regionMaxX, maxX + padX);
-    const ey = Math.min(WORK_HEIGHT, maxY + padBottom);
-
-    const next: CropBounds = {
-      sx,
-      sy,
-      sw: Math.max(24, ex - sx),
-      sh: Math.max(24, ey - sy),
-    };
-
-    return smoothCropBounds(prev, next, 0.25);
-  }
-
-  private drawCutout(targetCtx: CanvasRenderingContext2D, crop: CropBounds): void {
-    if (!this.maskedCanvas) {
-      return;
-    }
-
-    targetCtx.clearRect(0, 0, CUTOUT_WIDTH, CUTOUT_HEIGHT);
-
-    const scale = Math.min(CUTOUT_WIDTH / crop.sw, CUTOUT_HEIGHT / crop.sh);
-    const drawW = crop.sw * scale;
-    const drawH = crop.sh * scale;
-    const dx = (CUTOUT_WIDTH - drawW) * 0.5;
-    // Anchor cutout toward bottom of canvas so feet/waist rest cleanly on player ring
-    const dy = CUTOUT_HEIGHT - drawH;
-
-    targetCtx.drawImage(
-      this.maskedCanvas,
-      crop.sx,
-      crop.sy,
-      crop.sw,
-      crop.sh,
-      dx,
-      dy,
-      drawW,
-      drawH,
-    );
   }
 
   private closeVisionTasks(): void {
